@@ -54,7 +54,7 @@ def createOutputFiles(prefix):
 
 def writeRead(fq_read,file_handle):
 	file_handle.write("@"+fq_read["id"]+"_"+fq_read["ref"]+
-							"_"+(":".join(map(str,fq_read["pos"])))+
+							" "+(":".join(map(str,fq_read["pos"])))+
 							"_"+(":".join(map(str,fq_read["errors"])))+
 							"/"+fq_read["pair"]+"\n"
 							)
@@ -85,8 +85,8 @@ def getReadData(file_handle):
 
 		fq_read["pos"] = extract_pos(header_fields[2][9:])
 
-		if len(header_fields) == 4 and header_fields[3] !="":
-			if "errors=" not in header_fields[3]:
+		if len(header_fields) >= 4 and header_fields[3] !="":
+			if "errors=" not in header_fields[3] and "description" not in header_fields[3]:
 				print header_fields
 				print read_header
 				raise Exception("No errors field in header")
