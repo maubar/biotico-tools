@@ -162,7 +162,9 @@ if __name__ == '__main__':
 
   The current header format is composed of:
 
-  @<id>_<seq-id>_<start-pos>:<end-pos>:<strand>_<substitution-count>:<insertion-count>:<deletion-count>/<paired-end>
+  @<id>_<seq-id>  <start-pos>:<end-pos>:<strand>_<substitution-count>:<insertion-count>:<deletion-count>/<paired-end>
+
+ A space separates the read annotation from the read identifier which is @<id>_<seq-id>
   """)
 	parser.add_argument("input_reads",help="Fastq file to split")
 	parser.add_argument("-o","--output-folder",help="Define folder for output files. Default is ./")
