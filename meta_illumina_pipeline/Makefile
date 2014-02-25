@@ -1,7 +1,6 @@
 #Make parameters
 SHELL := /bin/bash
 
-
 #Prefixes for output files
 input_files := $(wildcard reads/*.fastq.gz)
 ref := /proj/b2011088/db/GRCh37/iGenome/Homo_sapiens/Ensembl/GRCh37/Sequence/BWAIndex/genome.fa
@@ -44,6 +43,13 @@ $(filtersam_pre).bam : $(sortsam_pre).bam
 $(sam2fq_pre).R%.fq : $(filtersam_pre).bam
 	run_picard SamToFastq.jar INPUT=$^ FASTQ=$(sam2fq_pre).R1.fq SECOND_END_FASTQ=$(sam2fq_pre).R2.fq $(write_to_log)
 
+assembly.mak : $(sam2fq_pre).R1.fq $(sam2fq_pre).R2.fq 
+	run-fermi.pl -P $^ -t 16 > $@ $(write_to_log)
+
+lol : assembly.mak
+	$(MAKE) -f assembly.mak -j 16 $(write_to_log)
+	touch lol
+	
 .PHONY :clean-all
 clean-all:
 	-rm *.fq.gz *.sam
