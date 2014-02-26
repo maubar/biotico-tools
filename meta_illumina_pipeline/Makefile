@@ -16,7 +16,7 @@ sortsam_pre := $(bwa_pre)_sort
 filtersam_pre := $(sortsam_pre)_filter
 sam2fq_pre := $(filtersam_pre)_sam2fq
 
-all: $(sam2fq_pre).R1.fq $(sam2fq_pre).R2.fq
+all: fmdef.p5.fq.gz
 
 #Quality filtering
 $(nesoni_pre)_R%.fq.gz: $(input_files)
@@ -44,12 +44,11 @@ $(sam2fq_pre).R%.fq : $(filtersam_pre).bam
 	run_picard SamToFastq.jar INPUT=$^ FASTQ=$(sam2fq_pre).R1.fq SECOND_END_FASTQ=$(sam2fq_pre).R2.fq $(write_to_log)
 
 assembly.mak : $(sam2fq_pre).R1.fq $(sam2fq_pre).R2.fq 
-	run-fermi.pl -P $^ -t 16 > $@ $(write_to_log)
+	run-fermi.pl -t 16 -P $^ > $@ $(write_to_log)
 
-lol : assembly.mak
+fmdef.p5.fq.gz : assembly.mak
 	$(MAKE) -f assembly.mak -j 16 $(write_to_log)
-	touch lol
-	
+
 .PHONY :clean-all
 clean-all:
 	-rm *.fq.gz *.sam
