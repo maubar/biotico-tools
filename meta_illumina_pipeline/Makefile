@@ -1,7 +1,7 @@
 #Make parameters
 SHELL := /bin/bash
 
-input_files := $(wildcard reads/*.fastq.gz)
+input_files := $(wildcard reads/*.fastq.gz) $(wildcard reads/*.fq.gz) $(wildcard reads/*.fq)
 output_basename = test
 
 #Databases
@@ -23,6 +23,9 @@ bwa_pre := $(nesoni_pre)_grch37
 sortsam_pre := $(bwa_pre)_sort
 filtersam_pre := $(sortsam_pre)_filter
 sam2fq_pre := $(filtersam_pre)_sam2fq
+
+#Delete produced files if step fails
+.DELETE_ON_ERROR:
 
 all: results.txt
 
@@ -66,8 +69,10 @@ contigs.fq: fmdef.p5.fq.gz
 #Run blast on contigs and output filtered results with <tool/script>
 #@TODO: Create script to filter blast xml output
 megablast.%.blst: contigs.fq
-	blastn -task megablast $(blast_params) $(megablast_params) -query $^ -db $(blastdb_path)/nt.split/nt.MAM > megablast.MAM.blst
-	blastn -task megablast $(blast_params) $(megablast_params) -query $^ -db $(blastdb_path)/nt.split/nt.BCT > megablast.BCT.blst
+	blastn -task megablast $(blast_params) $(megablast_params) -query $^ -db $(blastdb_path)/nt/nt > megablast.MAM.blst
+	touch megablast.BCT.blst
+	#blastn -task megablast $(blast_params) $(megablast_params) -query $^ -db $(blastdb_path)/nt.split/nt.MAM > megablast.MAM.blst
+	#blastn -task megablast $(blast_params) $(megablast_params) -query $^ -db $(blastdb_path)/nt.split/nt.BCT > megablast.BCT.blst
 
 #@TODO: Process blast output and output results
 results.txt: megablast.MAM.blst megablast.BCT.blst
