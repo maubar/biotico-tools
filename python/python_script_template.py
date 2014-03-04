@@ -3,12 +3,23 @@
 Docstring!
 
 
-Author: Mauricio Barrientos
+Author: Mauricio Barrientos-Somarribas
 Email:  mauricio.barrientos@ki.se
 
-License notice
-"""
+Copyright 2014 Mauricio Barrientos-Somarribas
 
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+"""
 
 import sys
 import argparse
@@ -43,10 +54,6 @@ def lazyFileReader(filename):
 
 
 def validate_args(args):
-	if not os.path.isfile(args.input):
-		sys.stderr.write("Input file does not exist!\n")
-		sys.exit(1)
-
 	return True
 
 
@@ -55,12 +62,12 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description="WRITE DESCRIPTION HERE",epilog= "TEXT AFTER THE HELP")
 	parser.add_argument("input",help="Input file",nargs="?", type=file, default=sys.stdin)
 	
-	parser.add_argument("-o","--output-file", default=sys.stdout, help="Name of the output file" )
+	parser.add_argument("-o","--output-file", type=file, default=sys.stdout, help="Name of the output file" )
 	parser.add_argument("-o","--output-prefix", default=None, help="Prefix of the output file(s)" )
 	parser.add_argument("-o","--output-folder", default="./", help="Folder where to output the results" )
 
-	parser.add_argument("-l","--log-file", help="Name of the log file",type=argparse.FileType("w"), default=sys.stderr)
-	groupV.add_argument("-v","--verbose", help="Print extra information about the execution",action="store_true")
+	parser.add_argument("-l","--log-file",type=argparse.FileType("w"), default=sys.stderr, help="Name of the log file")
+	parser.add_argument("-v","--verbose", action="store_true", help="Print extra information about the execution")
 			
 	args = parser.parse_args()
 	
