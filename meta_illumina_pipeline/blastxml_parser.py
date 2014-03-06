@@ -45,17 +45,18 @@ def main(args):
 	queries_processed = 0
 	for line in args.blast_xml:
 		if re.match(r"\s*<Iteration>\s*$",line):
-			iteration_status = processIteration(args.blast_xml,args.output_file)
-			assert(iteration_status)
+			iteration_data = {}
+			iteration_status = processIteration(args.blast_xml,args.output_file,iteration_data)
+			assert iteration_status
+			#postprocessIteration(iteration_data)
 			queries_processed +=1
 
 	args.log_file.write("Total iterations processed: "+str(queries_processed)+"\n")
 
 
 #*****************End of Main**********************	
-def processIteration(blastxml_fh,output_fh):
+def processIteration(blastxml_fh,output_fh,iteration_data):
 	processing_succesful = False
-	iteration_data = {}
 	for line in blastxml_fh:
 		#End of iteration, exit succesfully
 		if "</Iteration>" in line:
@@ -64,9 +65,9 @@ def processIteration(blastxml_fh,output_fh):
 		#Start processing hits for query
 		elif "<Iteration_hits>" in line:
 			iteration_data["Hits"] = []
-			hit_status = processHits(blastxml_fh,output_fh,iteration_data)
+			hits_status = processHits(blastxml_fh,output_fh,iteration_data)
 			#Check if there was a problem processing hits
-			assert(hit_status)
+			assert hits_status,"Iteration_hits element is malformed"
 
 		else: #Extract query attributes of interest
 			pattern_match = re.search(r"<(Iteration_query-(def|len))>(?P<value>.+?)</\1>",line)
@@ -75,7 +76,7 @@ def processIteration(blastxml_fh,output_fh):
 
 	#Process blast hits
 	#if "Hits" in iteration_data and iteration_data["Hits"]:
-	output_fh.write(str(iteration_data)+"\n\n")
+	writeIteration(iteration_data,output_fh)
 	return processing_succesful
 
 def processHits(blastxml_fh, output_fh,iteration_data):
@@ -87,7 +88,7 @@ def processHits(blastxml_fh, output_fh,iteration_data):
 		elif "<Hit>" in line:
 			new_hit = {}
 			hit_status = processHit(blastxml_fh,output_fh,new_hit)
-			assert(hit_status)
+			assert hit_status
 			iteration_data["Hits"].append(new_hit)
 
 	return processing_succesful
@@ -101,7 +102,7 @@ def processHit(blastxml_fh,output_fh,hit_data):
 		elif "<Hit_hsps>" in line:
 			hit_data["Hsps"] = []
 			hsps_status = processHsps(blastxml_fh,output_fh, hit_data )
-			assert(hsps_status)
+			assert hsps_status
 		else: #Extract hit attributes
 			hit_attr_match = re.search(r"<Hit_(.+?)>(.+?)</Hit_\1>",line)
 			if hit_attr_match:
@@ -117,7 +118,7 @@ def processHsps(blastxml_fh,output_fh, hit_data):
 		elif "<Hsp>" in line:
 			new_hsp = {}
 			hsp_status = processHsp(blastxml_fh,output_fh,new_hsp)
-			assert(hsp_status)
+			assert hsp_status
 			hit_data["Hsps"].append(new_hsp)
 	return processing_succesful
 
@@ -132,6 +133,27 @@ def processHsp(blastxml_fh,output_fh,hsp_data):
 			if hsp_attr_match:
 				hsp_data[ hsp_attr_match.group(1) ] = hsp_attr_match.group(2)
 	return processing_succesful
+
+
+def addCalculatedAttributes(iteration_data):
+	for hit in iteration_data["Hits"]:
+		for hsp in hit["Hsps"]:
+			pass
+
+def writeIteration(iteration_data, output_fh):
+	output_fh.write( ", ".join([x+":"+iteration_data[x] for x in iteration_data if x != "Hits"]))
+	output_fh.write("\n")
+	
+	if "Hits" in iteration_data:
+		for hit in iteration_data["Hits"]:
+			output_fh.write("\t" +", ".join([x+":"+hit[x] for x in hit if x != "Hsps"]))
+			output_fh.write("\n")
+
+			for hsp in hit["Hsps"]:
+				output_fh.write("\t\t" +", ".join([x+":"+hsp[x] for x in hsp if x not in ("hseq", "qseq", "midline")]))
+				output_fh.write("\n")
+
+	output_fh.write("\n")
 
 def validate_args(args):
 	return True
