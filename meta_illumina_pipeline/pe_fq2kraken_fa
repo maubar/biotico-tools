@@ -1,0 +1,16 @@
+#!/bin/bash
+# Script that takes to Illumina MiSeq/HiSeq paired-end fastq files
+# and produces a single-end fasta file with the appropriate
+# header and the nucleotide sequences merged with a separating N
+# for input in kraken
+
+R1="$1"
+R2="$2"
+
+if ! [ -z "$R1" ] || ! [ -z "$R2" ]
+then
+   echo "File $R1 or $R2 does not exist" >&2
+   exit 1
+fi
+
+paste $R1 $R2 | sed -nr  -e '1~4s/^@(.+?) .+\t@\1 .+$/>\1/p; 1~4 t no_err; 1~4Q; :no_err; 2~4s/\t/N/p'

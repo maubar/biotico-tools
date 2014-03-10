@@ -72,7 +72,9 @@ if __name__ == '__main__':
 	args = parser.parse_args()
 	
 	if validate_args(args):
+		time_start = time.time()
 		main( args )
+		args.log_file.write("Time elapsed: "+str(time.time() - time_start)+"\n")
 	else:
 		sys.stderr.write("Invalid arguments. Exiting script\n")
 		sys.exit(1)
