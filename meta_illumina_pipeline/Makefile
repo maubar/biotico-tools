@@ -1,17 +1,18 @@
 #Make parameters
 SHELL := /bin/bash
 
-input_files := $(wildcard reads/*.fastq.gz) $(wildcard reads/*.fq.gz) $(wildcard reads/*.fq)
+input_files := $(wildcard reads/*.fastq.gz) $(wildcard reads/*.fq.gz) $(wildcard reads/*.fq) $(wildcard reads/*.fastq)
 output_basename = test
 
 #Run params
 threads:=16
 
 #Databases
-bwa_hg_ref := /proj/b2011088/db/GRCh37/iGenome/Homo_sapiens/Ensembl/GRCh37/Sequence/BWAIndex/genome.fa
-blastdb_folder:= /proj/b2011088/nobackup
-kraken_db:=/labcommon/db/krakendb/kraken140311/
-minikraken_db:= /proj/b2011088/nobackup/krakendb/minikraken_20140104/
+db_path:=/labcommon/db
+bwa_hg_ref:= $(db_path)/iGenomes/Homo_sapiens/Ensembl/GRCh37/Sequence/BWAIndex/genome.fa
+blastdb_folder:=$(db_path)/blastdb
+kraken_db:=$(db_path)/krakendb/kraken140311/
+minikraken_db:=$(db_path)/krakendb/minikraken_20140104/
 
 #Tool parameters
 blast_params:= -evalue 10 -num_threads $(threads) -max_target_seqs 10 -outfmt 5 -show_gis
@@ -63,19 +64,21 @@ $(sam2fq_pre).R%.fq: $(filtersam_pre).bam
 $(sam2fq_pre).fq: $(filtersam_pre).bam
 	run_picard SamToFastq.jar INPUT=$^ FASTQ=$@ INTERLEAVE=True $(write_to_log)
 
-#@TODO: Diginorm step before assembly (debrujin graph) or the improvement on diginorm?
-# foo: $(sam2fq_pre).fq
-#	#First pass, normalize to 20X coverage
-# 	normalize-by-median.py -C 20 -k 20 -N 4 -x 2.5e8 --savehash $@ $^
+#@TODO: Choose between Diginorm or Fixseq?
+#Apply one pass diginorm procedure, normalize to 20X cov.
+#-N number of hashes 4, -x min size of hash, -k kmer size, -C coverage cutoff
+$(sam2fq_pre).fq.keep: $(sam2fq_pre).fq
+ 	normalize-by-median.py -C 20 --paired -k 20 -N 4 -x 2.5e8 $^
+
+#@TODO: Try diginorm 2/3 pass
 #	#Trim 3' ends with rare k-mers 
 # 	filter-abund.py $^ $@
 #	#Renormalize coverage to 5X
 # 	normalize-by-median.py -C 5 -k 20 -N 4 -x 1e8 $@
-# 	interleave-reads.py 
 
 #@TODO: Try other assemblers (Velvet, MetaRay, MetaIDBA)
 #Run assembly with Fermi
-fmdef.p5.fq.gz: $(sam2fq_pre).fq
+fmdef.p5.fq.gz: $(sam2fq_pre).fq.keep
 	run-fermi.pl -t $(threads) -c $^ > assembly.mak $(write_to_log)
 	$(MAKE) -f assembly.mak -j $(threads) $(write_to_log)
 
@@ -85,10 +88,10 @@ contigs.fq: fmdef.p5.fq.gz
 
 #Run Kraken on dataset
 kraken.out: contigs.fq
-	kraken --db $(minikraken_db) --threads $(threads) --fastq-input $^ > $@ $(write_to_log)
+	kraken --db $(kraken_db) --threads $(threads) --fastq-input $^ > $@ $(write_to_log)
 
 kraken.report: kraken.out
-	kraken-report --db $(minikraken_db) $^ > $@ $(write_to_log)
+	kraken-report --db $(kraken_db) $^ > $@ $(write_to_log)
 
 #Run blast on contigs and output filtered results with <tool/script>
 #@TODO: Create script to filter blast xml output
