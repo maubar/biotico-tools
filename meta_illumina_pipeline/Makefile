@@ -2,14 +2,14 @@
 SHELL := /bin/bash
 
 input_files := $(wildcard reads/*.fastq.gz) $(wildcard reads/*.fq.gz) $(wildcard reads/*.fq) $(wildcard reads/*.fastq)
-output_basename = test
+output_basename = P431_101
 
 #Run params
 threads:=16
 
 #Databases
 db_path:=/labcommon/db
-bwa_hg_ref:= $(db_path)/iGenomes/Homo_sapiens/Ensembl/GRCh37/Sequence/BWAIndex/genome.fa
+bwa_hg_ref:= $(db_path)/iGenomes/Homo_Sapiens/Ensembl/GRCh37/Sequence/BWAIndex/genome.fa
 blastdb_folder:=$(db_path)/blastdb
 kraken_db:=$(db_path)/krakendb/kraken140311/
 minikraken_db:=$(db_path)/krakendb/minikraken_20140104/
@@ -29,6 +29,7 @@ bwa_pre := $(nesoni_pre)_grch37
 sortsam_pre := $(bwa_pre)_sort
 filtersam_pre := $(sortsam_pre)_filter
 sam2fq_pre := $(filtersam_pre)_sam2fq
+diginorm_pre:=$(sam2fq_pre)_dgnrm
 
 #Delete produced files if step fails
 .DELETE_ON_ERROR:
@@ -41,7 +42,7 @@ $(nesoni_pre)_R%.fq.gz: $(input_files)
 	--out-separate yes $(nesoni_pre) pairs: $^ $(write_to_log)
 
 $(bwa_pre).sam: $(nesoni_pre)_R1.fq.gz $(nesoni_pre)_R2.fq.gz
-	bwa mem -t 8 -T 20 \
+	bwa mem -t $(threads) -T 20 \
 	-M $(bwa_hg_ref) $^ > $@ $(write_to_log)
 
 #Convert from sam to bam removing secondary mappings
@@ -57,38 +58,50 @@ $(filtersam_pre).bam: $(sortsam_pre).bam
 	run_picard FilterSamReads.jar INPUT=$^ OUTPUT=$@ FILTER=excludeAligned SORT_ORDER=queryname WRITE_READS_FILES=False $(write_to_log)
 
 #Convert unmapped reads to Fastq for assembly
-$(sam2fq_pre).R%.fq: $(filtersam_pre).bam
-	run_picard SamToFastq.jar INPUT=$^ FASTQ=$(sam2fq_pre).R1.fq SECOND_END_FASTQ=$(sam2fq_pre).R2.fq $(write_to_log)
+#$(sam2fq_pre).R%.fq: $(filtersam_pre).bam
+#	run_picard SamToFastq.jar INPUT=$^ FASTQ=$(sam2fq_pre).R1.fq SECOND_END_FASTQ=$(sam2fq_pre).R2.fq $(write_to_log)
 
 #Alternatively use interleaved paired-end fastq format
 $(sam2fq_pre).fq: $(filtersam_pre).bam
 	run_picard SamToFastq.jar INPUT=$^ FASTQ=$@ INTERLEAVE=True $(write_to_log)
 
+#@TODO: Use U-Search to merge paired-ends with overlapping thingy
+
+
 #@TODO: Choose between Diginorm or Fixseq?
 #Apply one pass diginorm procedure, normalize to 20X cov.
 #-N number of hashes 4, -x min size of hash, -k kmer size, -C coverage cutoff
-$(sam2fq_pre).fq.keep: $(sam2fq_pre).fq
- 	normalize-by-median.py -C 20 --paired -k 20 -N 4 -x 2.5e8 $^
-
+$(diginorm_pre).fq: $(sam2fq_pre).fq
+	normalize-by-median.py -C 20 --paired -k 20 -N 4 -x 2.5e8 $^ $(write_to_log)
+	mv $(sam2fq_pre).fq.keep $(diginorm_pre).fq
 #@TODO: Try diginorm 2/3 pass
 #	#Trim 3' ends with rare k-mers 
 # 	filter-abund.py $^ $@
 #	#Renormalize coverage to 5X
 # 	normalize-by-median.py -C 5 -k 20 -N 4 -x 1e8 $@
 
-#@TODO: Try other assemblers (Velvet, MetaRay, MetaIDBA)
-#Run assembly with Fermi
-fmdef.p5.fq.gz: $(sam2fq_pre).fq.keep
-	run-fermi.pl -t $(threads) -c $^ > assembly.mak $(write_to_log)
-	$(MAKE) -f assembly.mak -j $(threads) $(write_to_log)
+
+#@TODO: Try other assemblers (Velvet, MetaRay, MetaIDBA(now IDBA-UC :S) )
+
+#Assembly with MetaRay
+#@TODO: Choose Scaffolds or Contigs?
+ray_assembly/Scaffolds.fasta: $(diginorm_pre).fq
+	mpiexec -n 16 Ray Meta -i $^ -o ray_assembly $(write_to_log)
+
+#Assembly with Fermi
+#fmdef.p5.fq.gz: $(sam2fq_pre).fq.keep
+#	#run-fermi.pl -t $(threads) -c $^ > assembly.mak $(write_to_log)
+#	run-fermi.pl -t 8 -c $^ > assembly.mak $(write_to_log)
+#	$(MAKE) -f assembly.mak -j $(threads) $(write_to_log)
 
 #@TODO: Run a fastq join between assembled contigs and singletons
-contigs.fq: fmdef.p5.fq.gz
-	gunzip -c $^ > contigs.fq
+#contigs.fq: fmdef.p5.fq.gz
+#	gunzip -c $^ > contigs.fq
 
 #Run Kraken on dataset
-kraken.out: contigs.fq
-	kraken --db $(kraken_db) --threads $(threads) --fastq-input $^ > $@ $(write_to_log)
+#Other flags: --fastq-input 
+kraken.out: ray_assembly/Scaffolds.fasta
+	kraken --db $(kraken_db) --threads $(threads) $^ > $@ $(write_to_log)
 
 kraken.report: kraken.out
 	kraken-report --db $(kraken_db) $^ > $@ $(write_to_log)
@@ -105,6 +118,7 @@ kraken.report: kraken.out
 # results.txt: megablast.MAM.blst megablast.BCT.blst
 # 	touch results.txt
 
-.PHONY :clean-all
-clean-all:
-	-rm *.fq.gz *.sam
+.PHONY :clean
+clean:
+	-rm *.fq.gz *.sam *.log $(output_basename)_*
+	-rm -r ray_assembly
