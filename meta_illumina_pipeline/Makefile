@@ -12,7 +12,8 @@ db_path:=/labcommon/db
 bwa_hg_ref:= $(db_path)/iGenomes/Homo_Sapiens/Ensembl/GRCh37/Sequence/BWAIndex/genome.fa
 blastdb_folder:=$(db_path)/blastdb
 kraken_db:=$(db_path)/krakendb/kraken140311/
-minikraken_db:=$(db_path)/krakendb/minikraken_20140104/
+#Mini Kraken
+#kraken_db:=$(db_path)/krakendb/minikraken_20140104/
 
 #Tool parameters
 blast_params:= -evalue 10 -num_threads $(threads) -max_target_seqs 10 -outfmt 5 -show_gis
@@ -21,7 +22,7 @@ blastn_params:= -reward 4 -penalty -5 -gapopen 12 -gapextend 8
 
 #Logging info
 log_file := $(output_basename)_$(shell date +%s).log
-write_to_log := 2> >( tee -a $(log_file) >&2 )
+write_to_log := >( tee -a $(log_file) >&2 )
 
 #Prefixes for output files
 nesoni_pre := $(output_basename)_q20h
@@ -38,24 +39,29 @@ all: kraken.report
 
 #Quality filtering
 $(nesoni_pre)_R%.fq.gz: $(input_files)
+	echo -e "\nNesoni Quality Filtering\n\n" > $(write_to_log)
 	nesoni clip --homopolymers yes --quality 20 --length 75 \
-	--out-separate yes $(nesoni_pre) pairs: $^ $(write_to_log)
+	--out-separate yes $(nesoni_pre) pairs: $^ 2> $(write_to_log)
 
 $(bwa_pre).sam: $(nesoni_pre)_R1.fq.gz $(nesoni_pre)_R2.fq.gz
+	echo -e "\nMapping reads to GRCh37 with BWA MEM\n\n" > $(write_to_log)
 	bwa mem -t $(threads) -T 20 \
-	-M $(bwa_hg_ref) $^ > $@ $(write_to_log)
+	-M $(bwa_hg_ref) $^ > $@ 2> $(write_to_log)
 
 #Convert from sam to bam removing secondary mappings
 $(bwa_pre).bam: $(bwa_pre).sam
-	samtools view -F 256 -hSb -o $@ $^ $(write_to_log)
+	echo -e "\nConverting .sam to .bam\n\n" > $(write_to_log)
+	samtools view -F 256 -hSb -o $@ $^ 2> $(write_to_log)
 
 #Sort files by queryname
 $(sortsam_pre).bam: $(bwa_pre).bam
-	run_picard SortSam.jar INPUT=$^ OUTPUT=$@ SORT_ORDER=queryname $(write_to_log)
+	echo -e "\nSort bam file by queryname\n\n" > $(write_to_log)
+	run_picard SortSam.jar INPUT=$^ OUTPUT=$@ SORT_ORDER=queryname 2> $(write_to_log)
 
 #Keep only reads that did not map confidently (with both pairs)
 $(filtersam_pre).bam: $(sortsam_pre).bam
-	run_picard FilterSamReads.jar INPUT=$^ OUTPUT=$@ FILTER=excludeAligned SORT_ORDER=queryname WRITE_READS_FILES=False $(write_to_log)
+	echo -e "\nExtract reads that did not map to GRCh37\n\n" > $(write_to_log)
+	run_picard FilterSamReads.jar INPUT=$^ OUTPUT=$@ FILTER=excludeAligned SORT_ORDER=queryname WRITE_READS_FILES=False 2> $(write_to_log)
 
 #Convert unmapped reads to Fastq for assembly
 #$(sam2fq_pre).R%.fq: $(filtersam_pre).bam
@@ -63,7 +69,8 @@ $(filtersam_pre).bam: $(sortsam_pre).bam
 
 #Alternatively use interleaved paired-end fastq format
 $(sam2fq_pre).fq: $(filtersam_pre).bam
-	run_picard SamToFastq.jar INPUT=$^ FASTQ=$@ INTERLEAVE=True $(write_to_log)
+	echo -e "\nConvert bam to interleaved fastq\n\n" > $(write_to_log)
+	run_picard SamToFastq.jar INPUT=$^ FASTQ=$@ INTERLEAVE=True 2> $(write_to_log)
 
 #@TODO: Use U-Search to merge paired-ends with overlapping thingy
 
@@ -72,7 +79,8 @@ $(sam2fq_pre).fq: $(filtersam_pre).bam
 #Apply one pass diginorm procedure, normalize to 20X cov.
 #-N number of hashes 4, -x min size of hash, -k kmer size, -C coverage cutoff
 $(diginorm_pre).fq: $(sam2fq_pre).fq
-	normalize-by-median.py -C 20 --paired -k 20 -N 4 -x 2.5e8 $^ $(write_to_log)
+	echo -e "\nApply one-pass diginorm, coverage 20X\n\n" > $(write_to_log)
+	normalize-by-median.py -C 20 --paired -k 20 -N 4 -x 2.5e8 $^ 2> $(write_to_log)
 	mv $(sam2fq_pre).fq.keep $(diginorm_pre).fq
 #@TODO: Try diginorm 2/3 pass
 #	#Trim 3' ends with rare k-mers 
@@ -86,7 +94,8 @@ $(diginorm_pre).fq: $(sam2fq_pre).fq
 #Assembly with MetaRay
 #@TODO: Choose Scaffolds or Contigs?
 ray_assembly/Scaffolds.fasta: $(diginorm_pre).fq
-	mpiexec -n 16 Ray Meta -i $^ -o ray_assembly $(write_to_log)
+	echo -e "\nAssembling reads with Ray Meta\n\n" > $(write_to_log)
+	mpiexec -n 16 Ray Meta -i $^ -o ray_assembly 2> $(write_to_log)
 
 #Assembly with Fermi
 #fmdef.p5.fq.gz: $(sam2fq_pre).fq.keep
@@ -101,10 +110,12 @@ ray_assembly/Scaffolds.fasta: $(diginorm_pre).fq
 #Run Kraken on dataset
 #Other flags: --fastq-input 
 kraken.out: ray_assembly/Scaffolds.fasta
-	kraken --db $(kraken_db) --threads $(threads) $^ > $@ $(write_to_log)
+	echo -e "\nClassifying scaffolds with Kraken\n\n" > $(write_to_log)
+	kraken --db $(kraken_db) --threads $(threads) $^ > $@ 2> $(write_to_log)
 
 kraken.report: kraken.out
-	kraken-report --db $(kraken_db) $^ > $@ $(write_to_log)
+	echo -e "\nCreating Kraken report\n\n" > $(write_to_log)
+	kraken-report --db $(kraken_db) $^ > $@ 2> $(write_to_log)
 
 #Run blast on contigs and output filtered results with <tool/script>
 #@TODO: Create script to filter blast xml output
