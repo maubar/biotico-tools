@@ -25,8 +25,9 @@ import sys
 import argparse
 import os.path
 
-#Time of script execution
-from datetime import datetime
+#Time of script execution and logging module
+import time
+import logging
 
 import re
 import math
@@ -66,15 +67,22 @@ if __name__ == '__main__':
 	parser.add_argument("-o","--output-prefix", default=None, help="Prefix of the output file(s)" )
 	parser.add_argument("-o","--output-folder", default="./", help="Folder where to output the results" )
 
-	parser.add_argument("-l","--log-file",type=argparse.FileType("w"), default=sys.stderr, help="Name of the log file")
+	parser.add_argument("-l","--log-file", default=None, help="Name of the log file")
 	parser.add_argument("-v","--verbose", action="store_true", help="Print extra information about the execution")
 			
 	args = parser.parse_args()
 	
 	if validate_args(args):
+		#Initialize log
+		log_level = logging.INFO
+		if args.log_file:
+			logging.basicConfig(filename=args.log_file,level=log_level)
+		else:
+			logging.basicConfig(stream=sys.stderr,level=log_level)
+
 		time_start = time.time()
 		main( args )
-		args.log_file.write("Time elapsed: "+str(time.time() - time_start)+"\n")
+		logging.info("Time elapsed: "+str(time.time() - time_start)+"\n")
 	else:
-		sys.stderr.write("Invalid arguments. Exiting script\n")
+		logging.error("Invalid arguments. Exiting script\n")
 		sys.exit(1)
