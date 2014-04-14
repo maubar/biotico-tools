@@ -35,7 +35,7 @@ diginorm_pre:=$(sam2fq_pre)_dgnrm
 #Delete produced files if step fails
 .DELETE_ON_ERROR:
 
-all: kraken.report
+all: kraken_fermi.report kraken_ray.report kraken_fermi_nodigi.report kraken_ray_nodigi.report
 
 #Quality filtering
 $(nesoni_pre)_R%.fq.gz: $(input_files)
@@ -72,16 +72,18 @@ $(sam2fq_pre).fq: $(filtersam_pre).bam
 	echo -e "\nConvert bam to interleaved fastq\n\n" > $(write_to_log)
 	run_picard SamToFastq.jar INPUT=$^ FASTQ=$@ INTERLEAVE=True 2> $(write_to_log)
 
-#@TODO: Use U-Search to merge paired-ends with overlapping thingy
+#@TODO: Use U-Search/pandaseq to merge paired-ends with overlapping thingy
 
 
+
+#***********************Dataset reduction - Diginorm or else *************
 #@TODO: Choose between Diginorm or Fixseq?
 #Apply one pass diginorm procedure, normalize to 20X cov.
 #-N number of hashes 4, -x min size of hash, -k kmer size, -C coverage cutoff
 $(diginorm_pre).fq: $(sam2fq_pre).fq
 	echo -e "\nApply one-pass diginorm, coverage 20X\n\n" > $(write_to_log)
 	normalize-by-median.py -C 20 --paired -k 20 -N 4 -x 2.5e8 $^ 2> $(write_to_log)
-	mv $(sam2fq_pre).fq.keep $(diginorm_pre).fq
+	mv $(sam2fq_pre).fq.keep $@
 #@TODO: Try diginorm 2/3 pass
 #	#Trim 3' ends with rare k-mers 
 # 	filter-abund.py $^ $@
@@ -89,33 +91,73 @@ $(diginorm_pre).fq: $(sam2fq_pre).fq
 # 	normalize-by-median.py -C 5 -k 20 -N 4 -x 1e8 $@
 
 
-#@TODO: Try other assemblers (Velvet, MetaRay, MetaIDBA(now IDBA-UC :S) )
+#*************************Assembly and Classification step****************
 
-#Assembly with MetaRay
-#@TODO: Choose Scaffolds or Contigs?
-ray_assembly/Scaffolds.fasta: $(diginorm_pre).fq
+#*********************Meta-Ray with diginorm*************
+ray_assembly/Contigs.fasta: $(diginorm_pre).fq
 	echo -e "\nAssembling reads with Ray Meta\n\n" > $(write_to_log)
 	mpiexec -n 16 Ray Meta -i $^ -o ray_assembly 2> $(write_to_log)
 
-#Assembly with Fermi
-#fmdef.p5.fq.gz: $(sam2fq_pre).fq.keep
-#	#run-fermi.pl -t $(threads) -c $^ > assembly.mak $(write_to_log)
-#	run-fermi.pl -t 8 -c $^ > assembly.mak $(write_to_log)
-#	$(MAKE) -f assembly.mak -j $(threads) $(write_to_log)
+kraken_ray.out: ray_assembly/Contigs.fasta
+	echo -e "\nClassifying Ray's scaftigs with Kraken\n\n" > $(write_to_log)
+	kraken --db $(kraken_db) --threads $(threads) $^ > $@ 2> $(write_to_log)
+
+kraken_ray.report: kraken_ray.out
+	echo -e "\nCreating Kraken report\n\n" > $(write_to_log)
+	kraken-report --db $(kraken_db) $^ > $@ 2> $(write_to_log)
+
+#*********************Fermi with diginorm******************
+#Runs Fermi assembler until the 4th step. Qualities are not neccessary for classification
+fmdef.p4.fa.gz: $(diginorm_pre).fq
+	run-fermi.pl -t $(threads) -c $^ > assembly.mak $(write_to_log)
+	$(MAKE) -f assembly.mak -j $(threads) $@ $(write_to_log)
 
 #@TODO: Run a fastq join between assembled contigs and singletons
-#contigs.fq: fmdef.p5.fq.gz
-#	gunzip -c $^ > contigs.fq
+scaftigs.fa: fmdef.p4.fa.gz
+	gunzip -c $^ > $@
 
 #Run Kraken on dataset
 #Other flags: --fastq-input 
-kraken.out: ray_assembly/Scaffolds.fasta
-	echo -e "\nClassifying scaffolds with Kraken\n\n" > $(write_to_log)
+kraken_fermi.out: scaftigs.fa
+	echo -e "\nClassifying Fermi's scaftigs with Kraken\n\n" > $(write_to_log)
 	kraken --db $(kraken_db) --threads $(threads) $^ > $@ 2> $(write_to_log)
 
-kraken.report: kraken.out
+kraken_fermi.report: kraken_fermi.out
 	echo -e "\nCreating Kraken report\n\n" > $(write_to_log)
 	kraken-report --db $(kraken_db) $^ > $@ 2> $(write_to_log)
+
+
+#*********************Ray Meta - no diginorm *****************************
+ray_assembly_nodigi/Contigs.fasta: $(sam2fq_pre).fq
+	echo -e "\nAssembling reads with Ray - no diginorm\n\n" > $(write_to_log)
+	mpiexec -n 16 Ray Meta -i $^ -o ray_assembly_nodigi 2> $(write_to_log)
+
+kraken_ray_nodigi.out: ray_assembly_nodigi/Contigs.fasta
+	echo -e "\nClassifying Ray's scaftigs with Kraken\n\n" > $(write_to_log)
+	kraken --db $(kraken_db) --threads $(threads) $^ > $@ 2> $(write_to_log)
+
+kraken_ray_nodigi.report: kraken_ray_nodigi.out
+	echo -e "\nCreating Kraken report\n\n" > $(write_to_log)
+	kraken-report --db $(kraken_db) $^ > $@ 2> $(write_to_log)
+
+#*********************Fermi no diginorm*****************
+fermi_nodigi.p4.fa.gz: $(sam2fq_pre).fq
+	run-fermi.pl -p fermi_nodigi -t $(threads) -c $^ > assembly_nodigi.mak $(write_to_log)
+	$(MAKE) -f assembly_nodigi.mak -j $(threads) $@ $(write_to_log)
+
+scaftigs_nodigi.fa: fermi_nodigi.p4.fa.gz
+	gunzip -c $^ > $@
+
+kraken_fermi_nodigi.out: scaftigs_nodigi.fa
+	echo -e "\nClassifying Fermi's scaftigs with Kraken\n\n" > $(write_to_log)
+	kraken --db $(kraken_db) --threads $(threads) $^ > $@ 2> $(write_to_log)
+
+kraken_fermi_nodigi.report: kraken_fermi_nodigi.out
+	echo -e "\nCreating Kraken report\n\n" > $(write_to_log)
+	kraken-report --db $(kraken_db) $^ > $@ 2> $(write_to_log)
+
+
+#@TODO: SGA Assembly
 
 #Run blast on contigs and output filtered results with <tool/script>
 #@TODO: Create script to filter blast xml output
