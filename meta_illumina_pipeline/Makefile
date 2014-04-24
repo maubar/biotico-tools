@@ -85,7 +85,7 @@ $(diginorm_pre).fq: $(sam2fq_pre).fq
 	normalize-by-median.py -C 20 --paired -k 20 -N 4 -x 2.5e8 $^ 2> $(write_to_log)
 	mv $(sam2fq_pre).fq.keep $@
 #@TODO: Try diginorm 2/3 pass
-#	#Trim 3' ends with rare k-mers 
+#	#Trim 3' ends with rare k-mers
 # 	filter-abund.py $^ $@
 #	#Renormalize coverage to 5X
 # 	normalize-by-median.py -C 5 -k 20 -N 4 -x 1e8 $@
@@ -109,15 +109,15 @@ kraken_ray.report: kraken_ray.out
 #*********************Fermi with diginorm******************
 #Runs Fermi assembler until the 4th step. Qualities are not neccessary for classification
 fmdef.p4.fa.gz: $(diginorm_pre).fq
-	run-fermi.pl -t $(threads) -c $^ > assembly.mak $(write_to_log)
-	$(MAKE) -f assembly.mak -j $(threads) $@ $(write_to_log)
+	run-fermi.pl -t $(threads) -c $^ > assembly.mak 2> $(write_to_log)
+	$(MAKE) -f assembly.mak -j $(threads) $@ 2> $(write_to_log)
 
 #@TODO: Run a fastq join between assembled contigs and singletons
 scaftigs.fa: fmdef.p4.fa.gz
 	gunzip -c $^ > $@
 
 #Run Kraken on dataset
-#Other flags: --fastq-input 
+#Other flags: --fastq-input
 kraken_fermi.out: scaftigs.fa
 	echo -e "\nClassifying Fermi's scaftigs with Kraken\n\n" > $(write_to_log)
 	kraken --db $(kraken_db) --threads $(threads) $^ > $@ 2> $(write_to_log)
@@ -142,11 +142,11 @@ kraken_ray_nodigi.report: kraken_ray_nodigi.out
 
 #*********************Fermi no diginorm*****************
 fermi_nodigi.p4.fa.gz: $(sam2fq_pre).fq
-	run-fermi.pl -p fermi_nodigi -t $(threads) -c $^ > assembly_nodigi.mak $(write_to_log)
-	$(MAKE) -f assembly_nodigi.mak -j $(threads) $@ $(write_to_log)
+	run-fermi.pl -p fermi_nodigi -t $(threads) -c $^ 2> assembly_nodigi.mak $(write_to_log)
+	$(MAKE) -f assembly_nodigi.mak -j $(threads) $@ 2> $(write_to_log)
 
 scaftigs_nodigi.fa: fermi_nodigi.p4.fa.gz
-	gunzip -c $^ > $@
+	gunzip -c $^ > $@ 2> $(write_to_log)
 
 kraken_fermi_nodigi.out: scaftigs_nodigi.fa
 	echo -e "\nClassifying Fermi's scaftigs with Kraken\n\n" > $(write_to_log)
