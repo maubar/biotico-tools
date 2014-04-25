@@ -142,7 +142,7 @@ kraken_ray_nodigi.report: kraken_ray_nodigi.out
 
 #*********************Fermi no diginorm*****************
 fermi_nodigi.p4.fa.gz: $(sam2fq_pre).fq
-	run-fermi.pl -p fermi_nodigi -t $(threads) -c $^ 2> assembly_nodigi.mak $(write_to_log)
+	run-fermi.pl -p fermi_nodigi -t $(threads) -c $^ assembly_nodigi.mak 2> $(write_to_log)
 	$(MAKE) -f assembly_nodigi.mak -j $(threads) $@ 2> $(write_to_log)
 
 scaftigs_nodigi.fa: fermi_nodigi.p4.fa.gz
