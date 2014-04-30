@@ -64,7 +64,12 @@ diginorm_pre:=$(sam2fq_pre)_dgnrm
 #Delete produced files if step fails
 .DELETE_ON_ERROR:
 
-all: kraken_ray.report kraken_fermi.report kraken_abyss.report
+#all: kraken_ray.report kraken_fermi.report kraken_abyss.report
+all: $(sam2fq_pre)_pe.fq $(sam2fq_pre)_se.fq
+
+.PHONY: qc
+
+qc: $(nesoni_pre)_R1.fq_fastqc.zip $(nesoni_pre)_R2.fq_fastqc.zip
 
 #Quality filtering
 $(nesoni_pre)_R%.fq.gz: $(input_files)
@@ -72,24 +77,33 @@ $(nesoni_pre)_R%.fq.gz: $(input_files)
 	nesoni clip --homopolymers yes --quality 20 --length 75 \
 	--out-separate yes $(nesoni_pre) pairs: $^ 2> $(write_to_log)
 
-$(bwa_pre).sam: $(nesoni_pre)_R1.fq.gz $(nesoni_pre)_R2.fq.gz
-	echo -e "\nMapping reads to GRCh37 with BWA MEM\n\n" > $(write_to_log)
-	bwa mem -t $(threads) -T 20 \
-	-M $(bwa_hg_ref) $^ > $@ 2> $(write_to_log)
+#Quality assesment
+%.fq: %.fq_fastqc.zip
+	fastqc $^
+
+#Map paired-end reads against the Human Genome using BWA
+$(bwa_pre)_pe.sam: $(nesoni_pre)_R1.fq.gz $(nesoni_pre)_R2.fq.gz
+	echo -e "\nMapping paired-end reads to GRCh37 with BWA MEM\n\n" > $(write_to_log)
+	bwa mem -t $(threads) -T 20 -M $(bwa_hg_ref) $^ > $@ 2> $(write_to_log)
+
+#Map single end reads against the Human Genome using BWA
+$(bwa_pre)_se.sam: $(nesoni_pre)_single.fq.gz
+	echo -e "\nMapping single-end reads to GRCh37 with BWA MEM\n\n" > $(write_to_log)
+	bwa mem -t $(threads) -T 20 -M $(bwa_hg_ref) $^ > $@ 2> $(write_to_log)
 
 #Convert from sam to bam removing secondary mappings
-$(bwa_pre).bam: $(bwa_pre).sam
+$(bwa_pre)_pe.bam $(bwa_pre)_se.bam: $(bwa_pre)_%.bam: $(bwa_pre)_%.sam
 	echo -e "\nConverting .sam to .bam\n\n" > $(write_to_log)
 	samtools view -F 256 -hSb -o $@ $^ 2> $(write_to_log)
 
 #Sort files by queryname
-$(sortsam_pre).bam: $(bwa_pre).bam
+$(sortsam_pre)_pe.bam $(sortsam_pre)_se.bam: $(sortsam_pre)_%.bam : $(bwa_pre)_%.bam
 	echo -e "\nSort bam file by queryname\n\n" > $(write_to_log)
 	run_picard SortSam.jar INPUT=$^ OUTPUT=$@ SORT_ORDER=queryname 2> $(write_to_log)
 
 #Keep only reads that did not map confidently (with both pairs)
-$(filtersam_pre).bam: $(sortsam_pre).bam
-	echo -e "\nExtract reads that did not map to GRCh37\n\n" > $(write_to_log)
+$(filtersam_pre)_pe.bam $(filtersam_pre)_se.bam: $(filtersam_pre)_%.bam : $(sortsam_pre)_%.bam
+	echo -e "\nExtract $* reads that did not map to GRCh37\n\n" > $(write_to_log)
 	run_picard FilterSamReads.jar INPUT=$^ OUTPUT=$@ FILTER=excludeAligned SORT_ORDER=queryname WRITE_READS_FILES=False 2> $(write_to_log)
 
 #Convert unmapped reads to Fastq for assembly
@@ -97,7 +111,7 @@ $(filtersam_pre).bam: $(sortsam_pre).bam
 #	run_picard SamToFastq.jar INPUT=$^ FASTQ=$(sam2fq_pre).R1.fq SECOND_END_FASTQ=$(sam2fq_pre).R2.fq $(write_to_log)
 
 #Alternatively use interleaved paired-end fastq format
-$(sam2fq_pre).fq: $(filtersam_pre).bam
+$(sam2fq_pre)_pe.fq $(sam2fq_pre)_se.fq: $(sam2fq_pre)_%.fq : $(filtersam_pre)_%.bam
 	echo -e "\nConvert bam to interleaved fastq\n\n" > $(write_to_log)
 	run_picard SamToFastq.jar INPUT=$^ FASTQ=$@ INTERLEAVE=True 2> $(write_to_log)
 
@@ -105,10 +119,10 @@ $(sam2fq_pre).fq: $(filtersam_pre).bam
 
 #Apply one pass diginorm procedure, normalize to 20X cov.
 #-N number of hashes 4, -x min size of hash, -k kmer size, -C coverage cutoff
-$(diginorm_pre).fq: $(sam2fq_pre).fq
-	echo -e "\nApply one-pass diginorm, coverage 20X\n\n" > $(write_to_log)
-	normalize-by-median.py -C 20 --paired -k 20 -N 4 -x 2.5e8 $^ 2> $(write_to_log)
-	mv $(sam2fq_pre).fq.keep $@
+# $(diginorm_pre).fq: $(sam2fq_pre).fq
+# 	echo -e "\nApply one-pass diginorm, coverage 20X\n\n" > $(write_to_log)
+# 	normalize-by-median.py -C 20 --paired -k 20 -N 4 -x 2.5e8 $^ 2> $(write_to_log)
+# 	mv $(sam2fq_pre).fq.keep $@
 
 #*************************Assembly Step**********************************************
 #*********************Meta-Ray with diginorm*************
