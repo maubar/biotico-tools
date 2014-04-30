@@ -31,7 +31,7 @@
 SHELL := /bin/bash
 
 input_files := $(wildcard reads/*.fastq.gz) $(wildcard reads/*.fq.gz) $(wildcard reads/*.fq) $(wildcard reads/*.fastq)
-output_basename = P431_10x
+output_basename := P431_10x
 
 #Run params
 threads:=16
@@ -68,8 +68,7 @@ diginorm_pre:=$(sam2fq_pre)_dgnrm
 all: $(sam2fq_pre)_pe.fq $(sam2fq_pre)_se.fq
 
 .PHONY: qc
-
-qc: $(nesoni_pre)_R1.fq_fastqc.zip $(nesoni_pre)_R2.fq_fastqc.zip
+qc: $(nesoni_pre)_R1.fq_fastqc.zip $(nesoni_pre)_R2.fq_fastqc.zip $(nesoni_pre)_single.fq_fastqc.zip
 
 #Quality filtering
 $(nesoni_pre)_R%.fq.gz: $(input_files)
@@ -78,7 +77,7 @@ $(nesoni_pre)_R%.fq.gz: $(input_files)
 	--out-separate yes $(nesoni_pre) pairs: $^ 2> $(write_to_log)
 
 #Quality assesment
-%.fq: %.fq_fastqc.zip
+%.fq_fastqc.zip: %.fq.gz
 	fastqc $^
 
 #Map paired-end reads against the Human Genome using BWA
