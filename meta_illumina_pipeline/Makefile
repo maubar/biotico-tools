@@ -18,6 +18,7 @@
 # limitations under the License.
 
 # To-do's
+#@TODO: Consider Prinseq/trimmomatic for quality filtering
 #@TODO: Process single-ends from quality filtering
 #@TODO: Merge overlapping paired-ends into single end- U-Search/pandaseq
 #@TODO: Dataset reduction: Choose Diginorm/Fixseq/none?
