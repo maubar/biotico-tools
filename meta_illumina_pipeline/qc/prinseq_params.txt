@@ -1,0 +1,21 @@
+#Prinseq_params for metagenomics
+-verbose
+#Fasta 1, fastq 3
+-out_format 3
+-out_good ps_good
+-out_bad ps_bad
+-log prinseq.log
+#Filter options
+-min_len 75
+#Remove duplicates
+#	1:exact dup, 2: 5' dup 3: 3' dup 4: rc exact dup
+-derep 12
+
+#Low complexity filter
+#Options: dust , entropy
+-lc_method dust
+-lc_threshold 35
+##-lc_method entropy
+##-lc_threshold 25
+
+#Quality Trimming
