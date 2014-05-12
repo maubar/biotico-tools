@@ -1,8 +1,8 @@
 #Make parameters
 SHELL := /bin/bash
 
-R1:= $(wildcard reads/*R1*.fastq.gz)
-R2:= $(wildcard reads/*R2*.fastq.gz)
+R1:= $(wildcard ../reads/*R1*.fastq.gz)
+R2:= $(wildcard ../reads/*R2*.fastq.gz)
 
 output_basename := P431_102_QC
 
@@ -14,6 +14,8 @@ write_to_log := >( tee -a $(log_file) >&2 )
 threads:=16
 adaptor_file:= adapters/truseq_custom.fa
 TRIMMOMATIC:= java -jar /labcommon/tools/Trimmomatic-0.32/trimmomatic-0.32.jar
+sga_ec_kmer := 41
+sga_cov_filter := 2
 
 #Output basenames
 nesoni_1 := nesoni_def
@@ -24,6 +26,7 @@ nesoni_4 := nesoni_match15mm2_truseqht
 trimmy_1 := trimmy
 trimmy_nesoni := nesoni_noclip_trimmy
 
+sga_1:= sga
 
 nesoni_out_prefix = $(dir $@)P431_102_qf
 trimmomatic_out = $(addprefix, $(dir $@)P431_102_qf_ , $(addsuffix .fq.gz R1 R1_single R2 R2_single ))
@@ -65,6 +68,28 @@ $(trimmy_nesoni)/R%.fq.gz: $(R1) $(R2) | $(trimmy_nesoni)
 	-rm nesoni_temp*
 
 #prinseq-lite.pl -fastq $R1 -fastq2 $R2 -params prinseq_params.txt
+
+#Run SGA steps for qc
+# First, preprocess the data to remove ambiguous basecalls
+$(sga_1).fq: $(R1) $(R2)
+	sga preprocess --pe-mode 1 -o $@ $^
+
+# Build the index that will be used for error correction
+# Error corrector does not require the reverse BWT
+$(sga_1).sai: $(sga_1).fq
+	sga index -a ropebwt -t $(threads) --no-reverse $^
+
+# Perform error correction with a 41-mer.
+# The k-mer cutoff parameter is learned automatically
+$(sga_1).k$(sga_ec_kmer).ec.fq: $(sga_1).fq $(sga_1).sai
+	sga correct -k $(sga_ec_kmer) --discard --learn -t $(threads) -o $@ $< 
+
+# Index the corrected data
+$(sga_1).k$(sga_ec_kmer).ec.sai: $(sga_1).k$(sga_ec_kmer).ec.fq
+	sga index -a ropebwt -t $(threads) $^
+# Remove exact-match duplicates and reads with low-frequency k-mers
+$(sga_1).k$(sga_ec_kmer).ec.filter.pass.fa: $(sga_1).k$(sga_ec_kmer).ec.fq $(sga_1).k$(sga_ec_kmer).ec.sai
+	sga filter -x $(sga_cov_filter) -t $(threads) --homopolymer-check --low-complexity-check $<
 
 #Run fastqc with kmer 10
 %.fq_fastqc.zip: %.fq.gz
