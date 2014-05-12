@@ -1,0 +1,28 @@
+#!/bin/bash
+LOG="usearch.log"
+if ! [ -e R1_10000.fq ] || ! [ -e R2_10000.fq ];
+then
+	if ! [ -e ../R1_10000.fq ] || ! [ -e ../R2_10000.fq ];
+	then
+		seqtk sample -s 11 ../../myPipe_v0.1/P431_101_q20h_R1.fq.gz 10000 > ../R1_10000.fq 
+		seqtk sample -s 11 ../../myPipe_v0.1/P431_101_q20h_R2.fq.gz 10000 > ../R2_10000.fq 
+	fi
+	ln -s ../R1_10000.fq
+	ln -s ../R2_10000.fq
+fi
+
+#-minhsp imposes a minimum overlap
+echo "Usearch min ovlp 15 hsp 8" >> $LOG
+echo >> $LOG
+usearch7.0 -fastq_mergepairs R1_10000.fq -reverse R2_10000.fq -minhsp 8 -fastq_minmergelen 15 -fastaout usearch_hsp8.fa 2>>$LOG
+echo >> $LOG
+
+echo "Usearch hsp8 min ovlp 15 max mm 5" >> $LOG
+echo >> $LOG
+usearch7.0 -fastq_mergepairs R1_10000.fq -reverse R2_10000.fq -minhsp 8 -fastq_minmergelen 15 -fastq_maxdiffs 5 -fastaout usearch_hsp8_mm5.fa 2>>$LOG
+echo >> $LOG
+
+echo "Usearch hsp8 min ovlp 15 max ovlp 50" >> $LOG
+echo >> $LOG
+usearch7.0 -fastq_mergepairs R1_10000.fq -reverse R2_10000.fq -minhsp 8 -fastq_minmergelen 15 -fastq_maxmergelen 50 -fastaout usearch_hsp8_max50.fa 2>>$LOG
+echo >> $LOG

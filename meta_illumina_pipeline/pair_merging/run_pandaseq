@@ -1,0 +1,68 @@
+#!/bin/bash
+LOG="pandaseq.log"
+if ! [ -e R1_10000.fq ] || ! [ -e R2_10000.fq ];
+then
+	if ! [ -e ../R1_10000.fq ] || ! [ -e ../R2_10000.fq ];
+	then
+		seqtk sample -s 11 ../../myPipe_v0.1/P431_101_q20h_R1.fq.gz 10000 > ../R1_10000.fq 
+		seqtk sample -s 11 ../../myPipe_v0.1/P431_101_q20h_R2.fq.gz 10000 > ../R2_10000.fq 
+	fi
+	ln -s ../R1_10000.fq
+	ln -s ../R2_10000.fq
+fi
+
+echo "DEFAULT PARAMS min ovlp 15" >> $LOG
+pandaseq -f R1_10000.fq -r R2_10000.fq -o 15 -w panda_default.fa -g tmp.log
+grep -B 8 "OVERLAPS" tmp.log > tmp.final.log
+awk -f gather_stats.awk tmp.final.log >> $LOG
+echo >> $LOG
+rm tmp.log
+rm tmp.final.log
+
+echo "Simple Bayesian min ovlp 15" >> $LOG
+pandaseq -f R1_10000.fq -r R2_10000.fq -A simple_bayesian -o 15 -w panda_bayes.fa -g tmp.log
+grep -B 8 "OVERLAPS" tmp.log > tmp.final.log
+awk -f gather_stats.awk tmp.final.log >> $LOG
+echo >> $LOG
+rm tmp.log
+rm tmp.final.log
+
+echo "PEAR min ovlp 15" >> $LOG
+pandaseq -f R1_10000.fq -r R2_10000.fq -A pear -o 15 -w panda_pear.fa -g tmp.log
+grep -B 8 "OVERLAPS" tmp.log > tmp.final.log
+awk -f gather_stats.awk tmp.final.log >> $LOG
+echo >> $LOG
+rm tmp.log
+rm tmp.final.log
+
+echo "RDP MLE min ovlp 15" >> $LOG
+pandaseq -f R1_10000.fq -r R2_10000.fq -A rdp_mle -o 15 -w panda_rdp.fa -g tmp.log
+grep -B 8 "OVERLAPS" tmp.log > tmp.final.log
+awk -f gather_stats.awk tmp.final.log >> $LOG
+echo >> $LOG
+rm tmp.log
+rm tmp.final.log
+
+echo "Simple Bayesian ovlp min 15 max 50" >> $LOG
+pandaseq -f R1_10000.fq -r R2_10000.fq -A simple_bayesian -o 15 -O 50 -w panda_bayes_max50.fa -g tmp.log
+grep -B 8 "OVERLAPS" tmp.log > tmp.final.log
+awk -f gather_stats.awk tmp.final.log >> $LOG
+echo >> $LOG
+rm tmp.log
+rm tmp.final.log
+
+echo "PEAR ovlp min 15 max 50" >> $LOG
+pandaseq -f R1_10000.fq -r R2_10000.fq -A pear -o 15 -O 50 -w panda_pear_max50.fa -g tmp.log
+grep -B 8 "OVERLAPS" tmp.log > tmp.final.log
+awk -f gather_stats.awk tmp.final.log >> $LOG
+echo >> $LOG
+rm tmp.log
+rm tmp.final.log
+
+echo "RDP MLE ovlp min 15 max 50" >> $LOG
+pandaseq -f R1_10000.fq -r R2_10000.fq -A rdp_mle -o 15 -O 50 -w panda_rdp_max50.fa -g tmp.log
+grep -B 8 "OVERLAPS" tmp.log > tmp.final.log
+awk -f gather_stats.awk tmp.final.log >> $LOG
+echo >> $LOG
+rm tmp.log
+rm tmp.final.log

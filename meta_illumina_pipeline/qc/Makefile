@@ -36,14 +36,14 @@ prinseq := prinseq_1
 #Delete produced files if step fails
 .DELETE_ON_ERROR:
 
-#.SECONDARY: $(nesoni_1)_R1.fq.gz $(nesoni_2)_R1.fq.gz $(nesoni_3)_R1.fq.gz $(nesoni_4)_R1.fq.gz
-.SECONDARY: $(nesoni_3)_R1.fq.gz $(nesoni_4)_R1.fq.gz $(trimmy_1)_R1.fq.gz $(trimmy_nesoni)_R1.fq.gz
+#Avoids the deletion of files because of gnu make behavior with implicit rules
+.SECONDARY:
 
 # all: $(nesoni_1)_R1.fq_fastqc.zip $(nesoni_2)_R1.fq_fastqc.zip $(nesoni_3)_R1.fq_fastqc.zip $(nesoni_4)_R1.fq_fastqc.zip $(trimmy_1)_R1.fq_fastqc.zip
 all: $(trimmy_nesoni)_R1.fq_fastqc.zip $(trimmy_nesoni)_R2.fq_fastqc.zip
 
 
-$(nesoni_1) $(nesoni_2) $(nesoni_3) $(nesoni_4) $(trimmy_1) $(trimmy_nesoni):
+$(nesoni_1) $(nesoni_2) $(nesoni_3) $(nesoni_4) $(trimmy_1) $(trimmy_nesoni) $(prinseq):
 	mkdir -p $@
 
 $(nesoni_1)/R%.fq.gz: $(R1) $(R2) | $(nesoni_1)
@@ -67,62 +67,65 @@ $(trimmy_nesoni)/R%.fq.gz: $(R1) $(R2) | $(trimmy_nesoni)
 	$(TRIMMOMATIC) PE -threads 16 -phred33 -trimlog trimmomatic.log nesoni_temp_R1.fq.gz nesoni_temp_R2.fq.gz $(trimmy_nesoni)_R1.fq.gz $(trimmy_nesoni)_singleR1.fq.gz $(trimmy_nesoni)_R2.fq.gz $(trimmy_nesoni)_singleR2.fq.gz ILLUMINACLIP:$(adaptor_file):2:30:10 MINLEN:75 2> $(write_to_log)
 	-rm nesoni_temp*
 
-#prinseq-lite.pl -fastq $R1 -fastq2 $R2 -params prinseq_params.txt
+$(prinseq)/cosillo.fq: $(R1) $(R2) | $(prinseq)
+	prinseq-lite.pl -fastq $(R1) -fastq2 $(R2) -params prinseq_params.txt
 
 #Run SGA steps for qc
 # First, preprocess the data to remove ambiguous basecalls
-$(sga_1).fq: $(R1) $(R2)
+%_sga.fq: %_R1_001.fastq.gz %_R2_001.fastq.gz
 	sga preprocess --pe-mode 1 -o $@ $^
 
 # Build the index that will be used for error correction
 # Error corrector does not require the reverse BWT
-$(sga_1).sai: $(sga_1).fq
+sga_qc/$(sga_1)_sga.sai: %_sga.sai : %_sga.fq
 	sga index -a ropebwt -t $(threads) --no-reverse $^
 
 # Perform error correction with a 41-mer.
 # The k-mer cutoff parameter is learned automatically
-$(sga_1).k$(sga_ec_kmer).ec.fq: $(sga_1).fq $(sga_1).sai
+sga_qc/$(sga_1).k$(sga_ec_kmer).ec.fq: %.k($sga_ec_kmer).ec.fq : %.fq %.sai
 	sga correct -k $(sga_ec_kmer) --discard --learn -t $(threads) -o $@ $< 
 
 # Index the corrected data
-$(sga_1).k$(sga_ec_kmer).ec.sai: $(sga_1).k$(sga_ec_kmer).ec.fq
+sga_qc/$(sga_1).k$(sga_ec_kmer).ec.sai: %.k$(sga_ec_kmer).ec.sai : %.k$(sga_ec_kmer).ec.fq
 	sga index -a ropebwt -t $(threads) $^
+
 # Remove exact-match duplicates and reads with low-frequency k-mers
-$(sga_1).k$(sga_ec_kmer).ec.filter.pass.fa: $(sga_1).k$(sga_ec_kmer).ec.fq $(sga_1).k$(sga_ec_kmer).ec.sai
+sga_qc/$(sga_1).k$(sga_ec_kmer).ec.filter.pass.fa: $(sga_1).k$(sga_ec_kmer).ec.fq $(sga_1).k$(sga_ec_kmer).ec.sai
 	sga filter -x $(sga_cov_filter) -t $(threads) --homopolymer-check --low-complexity-check $<
 
-#Run fastqc with kmer 10
+#############QUALITY VERIFICATION########################
+
+###########FASTQC############
 %.fq_fastqc.zip: %.fq.gz
 	fastqc --noextract -k 10 $^
 
 %.fq_fastqc.zip: %.fq
 	fastqc --noextract -k 10 $^
 
+##########SGA PREQC###########
+#Depends on the rules for creating the index
 #Run SGA preqc
-raw_reads.preqc: $(R1) $(R2)
-	sga preprocess --pe-mode 1 $^ > raw_reads.fastq
-	sga index -a ropebwt --no-reverse -t 8 raw_reads.fastq
-	sga preqc -t 8 raw_reads.fastq > raw_reads.preqc
-	sga-preqc-report.py raw_reads.preqc 
+%.preqc: %.fq %.sai
+	sga preqc -t 16 $< > $@
+	sga-preqc-report.py $@
 
-qual_trimmed.preqc: $(trimmy_nesoni)_R1.fq.gz $(trimmy_nesoni)_R2.fq.gz
-	sga preprocess --pe-mode 1 $^ > qual_trimmed.fastq
-	sga index -a ropebwt --no-reverse -t 8 qual_trimmed.fastq
-	sga preqc -t 8 qual_trimmed.fastq > qual_trimmed.preqc
-	sga-preqc-report.py qual_trimmed.preqc
+##############JELLYFISH############
 
-#Run Jellyfish 17-mer
-%.k17.hist: %.fq
-	mkdir -p $*_jellyfish_17mer
-	jellyfish count -s 8G -C -m 17 -t 16 -o $*_jellyfish_17mer/k17 $^
-	cd $*_jellyfish_17mer && jellyfish merge -o k17.jf k17_*
-	jellyfish histo -t 16 -f $*_jellyfish_17mer/k17.jf > $*.k17.hist
+%_jf_17mer/k17_000: %.fq
+	mkdir -p $*_jf_17mer
+	jellyfish count -s 8G -C -m 17 -t 16 -o $(dir $@)k17 $^
+
+%_jf_17mer/k17.jf: %_jf_17mer/k17_000
+	jellyfish merge -o $@ $(dir $<)k17_*
+
+%.k17.hist: %_jf_17mer/k17.jf
+	jellyfish histo -t 16 -f $^ > $@
 
 %.k31.hist: %.fq
-	mkdir -p $*_jellyfish_31mer
-	jellyfish count -s 8G -C -m 31 -t 16 -o $*_jellyfish_31mer/k31 $^
-	cd $*_jellyfish_31mer && jellyfish merge -o k31.jf k31_*
-	jellyfish histo -t 16 -f $*_jellyfish_31mer/k31.jf > $*.k31.hist
+	mkdir -p $*_jf_31mer
+	jellyfish count -s 8G -C -m 31 -t 16 -o $*_jf_31mer/k31 $^
+	cd $*_jf_31mer && jellyfish merge -o k31.jf k31_*
+	jellyfish histo -t 16 -f $*_jf_31mer/k31.jf > $*.k31.hist
 
 .PHONY: clean
 clean:
