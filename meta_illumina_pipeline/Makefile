@@ -42,8 +42,12 @@ db_path:=/labcommon/db
 bwa_hg_ref:= $(db_path)/iGenomes/Homo_Sapiens/Ensembl/GRCh37/Sequence/BWAIndex/genome.fa
 blastdb_folder:=$(db_path)/blastdb
 kraken_db:=$(db_path)/krakendb/kraken140311/
+swissprot_fasta:=$(db_path)/fasta/uniprot_sprot.fasta
 #Mini Kraken
 #kraken_db:=$(db_path)/krakendb/minikraken_20140104/
+
+#Paths to binaries
+FragGeneScan_folder:=/labcommon/tools/FragGeneScan1.18
 
 #Tool parameters
 blast_params:= -evalue 10 -num_threads $(threads) -max_target_seqs 10 -outfmt 5 -show_gis
@@ -64,6 +68,8 @@ diginorm_pre:=$(sam2fq_pre)_dgnrm
 
 #Delete produced files if step fails
 .DELETE_ON_ERROR:
+#Files produced by implicit rules are not deleted
+.SECONDARY:
 
 #all: kraken_ray.report kraken_fermi.report kraken_abyss.report
 all: $(sam2fq_pre)_pe.fq $(sam2fq_pre)_se.fq
@@ -125,39 +131,63 @@ $(sam2fq_pre)_pe.fq $(sam2fq_pre)_se.fq: $(sam2fq_pre)_%.fq : $(filtersam_pre)_%
 # 	mv $(sam2fq_pre).fq.keep $@
 
 #*************************Assembly Step**********************************************
-#*********************Meta-Ray with diginorm*************
-raymeta/Contigs.fasta: $(diginorm_pre).fq
+#*********************Meta-Ray*************
+raymeta/Contigs.fasta: $(sam2fq_pre).fq
 	echo -e "\nAssembling reads with Ray Meta\n\n" > $(write_to_log)
-	mpiexec -n 16 Ray Meta -i $^ -o raymeta 2> $(write_to_log)
+	mpiexec -n 16 Ray Meta -i $^ -o $(dir $@) 2> $(write_to_log)
 
 raymeta_contigs.fa: raymeta/Contigs.fasta
 	ln -s $^ $@
 
-#*********************Fermi with diginorm******************
+#*********************Fermi*******************
 #Runs Fermi assembler until the 4th step.
 #Qualities are not neccessary for Kraken/Blast classification
-fermi/fmdef.p4.fa.gz: $(diginorm_pre).fq
+fermi/fmdef.p4.fa.gz: $(sam2fq_pre).fq
 	mkdir -p fermi
 	cd fermi && run-fermi.pl -t $(threads) -c ../$^ > assembly.mak 2> $(write_to_log)
-	cd fermi && $(MAKE) -f assembly.mak -j $(threads) $@ 2> $(write_to_log)
+	cd fermi && $(MAKE) -f assembly.mak -j $(threads) $(notdir $@) 2> $(write_to_log)
 
 fermi_contigs.fa: fermi/fmdef.p4.fa.gz
 	gunzip -c $^ > $@
 
-#*************************Abyss with diginorm***********************
-abyssk47-contigs.fa: $(diginorm_pre).fq
+#*************************Abyss***********************
+abyss/abyssk47-contigs.fa: $(sam2fq_pre).fq
 	mkdir -p abyss
-	cd abyss && abyss-pe k=47 name='abyssk47' in='$^' np=16
+	cd abyss && abyss-pe k=47 name='abyssk47' in='$^' np=16 2> $(write_to_log)
 
-#*************************Run Kraken on contigs**************************
+abyss_contigs.fa: abyss/abyssk47-contigs.fa
+	ln -s $^ $@
+
+#*************************Filter low size contigs*****************************
+#Keep only contigs greater than 750bp
+raymeta_contigs_1k.fa fermi_contigs_1k.fa abyss_contigs_1k.fa: %_contigs_1k.fa : %_contigs.fa
+	seqtk seq -L 750 $^ > $@ 2> $(write_to_log)
+
+#*************************Taxonomy analysis**********************************
+
+#*************************Kraken - Salzberg**************************
 #Other flags: --fastq-input
-kraken_raymeta.out kraken_fermi.out kraken_abyss.out: kraken_%.out : %_contigs.fa
+kraken_raymeta.out kraken_fermi.out kraken_abyss.out: kraken_%.out : %_contigs_1k.fa
 	echo -e "\nClassifying $* contigs with Kraken\n\n" > $(write_to_log)
 	kraken --db $(kraken_db) --threads $(threads) $^ > $@ 2> $(write_to_log)
 
 kraken_raymeta.report kraken_fermi.report kraken_abyss.report: kraken_%.report : kraken_%.out
 	echo -e "\nCreating Kraken report for $* \n\n" > $(write_to_log)
 	kraken-report --db $(kraken_db) $^ > $@ 2> $(write_to_log)
+
+#************************Frag Gene Scan **********************************
+#Contig analysis
+raymeta_fgs.faa fermi_fgs.faa abyss_fgs.faa: %_fgs.faa : %_contigs_1k.fa
+	$(FragGeneScan_folder)/run_FragGeneScan.pl -genome=$^ -out=$*_fgs -complete=0 -train=illumina_10
+
+#All filtered reads analysis
+allreads_fgs.%: $(sam2fq_pre)_pe.fq $(sam2fq_pre)_se.fq
+	cat $^ | $(FragGeneScan_folder)/run_FragGeneScan.pl -genome=- -out=$*_fgs -complete=0 -train=illumina_10
+
+#*************************PHmmer**************************
+#Optional --domtblout $(basename $@).dom
+raymeta_fgs_phmmer.faa fermi_fgs_phmmer.faa abyss_fgs_phmmer.faa: %_fgs_phmmer.tbl: %_fgs.faa $(swissprot_fasta)
+	phmmer --cpu $(threads) --noali --tblout $@ $^ $(swissprot_fasta) >/dev/null 2> $(write_to_log)
 
 #Run blast on contigs and output filtered results with <tool/script>
 #@TODO: Create script to filter blast xml output
