@@ -19,14 +19,13 @@
 
 # To-do's
 #@TODO: Consider Prinseq/trimmomatic for quality filtering
-#@TODO: Process single-ends from quality filtering
+#@TODO: Consider alternative mappers(Stampy/STAR) and read removal strategies
 #@TODO: Merge overlapping paired-ends into single end- U-Search/pandaseq
 #@TODO: Dataset reduction: Choose Diginorm/Fixseq/none?
-#			-Try 3 pass Diginorm
 #@TODO: Try other assemblers: SGA, CABOG
 #@TODO: Extract singletons via mapping/file parsing after assembly
-#@TODO: Classify singletons with Kraken
-#@TODO: Include protein homology based classification
+#@TODO: Classify paired-end reads with Kraken? Does it make sense?
+#@TODO: Include protein homology based classification - blastx?
 
 #Make parameters
 SHELL := /bin/bash
@@ -50,13 +49,13 @@ swissprot_fasta:=$(db_path)/fasta/uniprot_sprot.fasta
 FragGeneScan_folder:=/labcommon/tools/FragGeneScan1.18
 
 #Tool parameters
-blast_params:= -evalue 10 -num_threads $(threads) -max_target_seqs 10 -outfmt 5 -show_gis
+blast_params:= -evalue 1 -num_threads $(threads) -max_target_seqs 10 -outfmt 5 -show_gis
 megablast_params:= -reward 2 -penalty -3 -gapopen 5 -gapextend 2
 blastn_params:= -reward 4 -penalty -5 -gapopen 12 -gapextend 8
 
 #Logging info
-log_file := $(output_basename)_$(shell date +%s).log
-write_to_log := >( tee -a $(log_file) >&2 )
+log_name := $(output_basename)_$(shell date +%s).log
+log_file := >( tee -a $(log_name) >&2 )
 
 #Prefixes for output files
 nesoni_pre := $(output_basename)_q20h
@@ -68,22 +67,24 @@ diginorm_pre:=$(sam2fq_pre)_dgnrm
 
 #Outputs
 kraken_reports:= kraken_raymeta.report kraken_fermi.report kraken_abyss.report
-phmmer_files := raymeta_fgs_phmmer.tbl fermi_fgs_phmmer.tbl abyss_fgs_phmmer.tbl
+phmmer_files := reads_pe_fgs_phmmer.tbl reads_se_fgs_phmmer.tbl raymeta_fgs_phmmer.tbl fermi_fgs_phmmer.tbl abyss_fgs_phmmer.tbl
+blastx_out := raymeta_fgs_blastx.xml fermi_fgs_blastx.xml abyss_fgs_blastx.xml
 
 #Delete produced files if step fails
 .DELETE_ON_ERROR:
 #Files produced by implicit rules are not deleted
 .SECONDARY:
 
-all: $(kraken_reports) $(phmmer_files)
+all: $(kraken_reports) $(phmmer_files) $(blastx_out)
+	
 .PHONY: qc
 qc: $(nesoni_pre)_R1.fq_fastqc.zip $(nesoni_pre)_R2.fq_fastqc.zip $(nesoni_pre)_single.fq_fastqc.zip
 
 #Quality filtering
 $(nesoni_pre)_R%.fq.gz: $(input_files)
-	@echo -e "\nNesoni Quality Filtering\n\n" > $(write_to_log)
+	@echo -e "\nNesoni Quality Filtering\n\n" > $(log_file)
 	nesoni clip --homopolymers yes --quality 20 --length 75 \
-	--out-separate yes $(nesoni_pre) pairs: $^ 2> $(write_to_log)
+	--out-separate yes $(nesoni_pre) pairs: $^ 2> $(log_file)
 
 #Quality assesment
 %.fq_fastqc.zip: %.fq.gz
@@ -91,52 +92,52 @@ $(nesoni_pre)_R%.fq.gz: $(input_files)
 
 #Map paired-end reads against the Human Genome using BWA
 $(bwa_pre)_pe.sam: $(nesoni_pre)_R1.fq.gz $(nesoni_pre)_R2.fq.gz
-	@echo -e "\nMapping paired-end reads to GRCh37 with BWA MEM\n\n" > $(write_to_log)
-	bwa mem -t $(threads) -T 20 -M $(bwa_hg_ref) $^ > $@ 2> $(write_to_log)
+	@echo -e "\nMapping paired-end reads to GRCh37 with BWA MEM\n\n" > $(log_file)
+	bwa mem -t $(threads) -T 20 -M $(bwa_hg_ref) $^ > $@ 2> $(log_file)
 
 #Map single end reads against the Human Genome using BWA
 $(bwa_pre)_se.sam: $(nesoni_pre)_single.fq.gz
-	@echo -e "\nMapping single-end reads to GRCh37 with BWA MEM\n\n" > $(write_to_log)
-	bwa mem -t $(threads) -T 20 -M $(bwa_hg_ref) $^ > $@ 2> $(write_to_log)
+	@echo -e "\nMapping single-end reads to GRCh37 with BWA MEM\n\n" > $(log_file)
+	bwa mem -t $(threads) -T 20 -M $(bwa_hg_ref) $^ > $@ 2> $(log_file)
 
 #Convert from sam to bam removing secondary mappings
 $(bwa_pre)_pe.bam $(bwa_pre)_se.bam: $(bwa_pre)_%.bam: $(bwa_pre)_%.sam
-	@echo -e "\nConverting .sam to .bam\n\n" > $(write_to_log)
-	samtools view -F 256 -hSb -o $@ $^ 2> $(write_to_log)
+	@echo -e "\nConverting .sam to .bam\n\n" > $(log_file)
+	samtools view -F 256 -hSb -o $@ $^ 2> $(log_file)
 
 #Sort files by queryname
 $(sortsam_pre)_pe.bam $(sortsam_pre)_se.bam: $(sortsam_pre)_%.bam : $(bwa_pre)_%.bam
-	@echo -e "\nSort bam file by queryname\n\n" > $(write_to_log)
-	run_picard SortSam.jar INPUT=$^ OUTPUT=$@ SORT_ORDER=queryname 2> $(write_to_log)
+	@echo -e "\nSort bam file by queryname\n\n" > $(log_file)
+	run_picard SortSam.jar INPUT=$^ OUTPUT=$@ SORT_ORDER=queryname 2> $(log_file)
 
 #Keep only reads that did not map confidently (with both pairs)
 $(filtersam_pre)_pe.bam $(filtersam_pre)_se.bam: $(filtersam_pre)_%.bam : $(sortsam_pre)_%.bam
-	@echo -e "\nExtract $* reads that did not map to GRCh37\n\n" > $(write_to_log)
-	run_picard FilterSamReads.jar INPUT=$^ OUTPUT=$@ FILTER=excludeAligned SORT_ORDER=queryname WRITE_READS_FILES=False 2> $(write_to_log)
+	@echo -e "\nExtract $* reads that did not map to GRCh37\n\n" > $(log_file)
+	run_picard FilterSamReads.jar INPUT=$^ OUTPUT=$@ FILTER=excludeAligned SORT_ORDER=queryname WRITE_READS_FILES=False 2> $(log_file)
 
 #Convert unmapped reads to Fastq for assembly
 #$(sam2fq_pre).R%.fq: $(filtersam_pre).bam
-#	run_picard SamToFastq.jar INPUT=$^ FASTQ=$(sam2fq_pre).R1.fq SECOND_END_FASTQ=$(sam2fq_pre).R2.fq $(write_to_log)
+#	run_picard SamToFastq.jar INPUT=$^ FASTQ=$(sam2fq_pre).R1.fq SECOND_END_FASTQ=$(sam2fq_pre).R2.fq $(log_file)
 
 #Alternatively use interleaved paired-end fastq format
 $(sam2fq_pre)_pe.fq $(sam2fq_pre)_se.fq: $(sam2fq_pre)_%.fq : $(filtersam_pre)_%.bam
-	@echo -e "\nConvert bam to interleaved fastq\n\n" > $(write_to_log)
-	run_picard SamToFastq.jar INPUT=$^ FASTQ=$@ INTERLEAVE=True 2> $(write_to_log)
+	@echo -e "\nConvert bam to interleaved fastq\n\n" > $(log_file)
+	run_picard SamToFastq.jar INPUT=$^ FASTQ=$@ INTERLEAVE=True 2> $(log_file)
 
 #***********************Dataset reduction*********************************
 
 #Apply one pass diginorm procedure, normalize to 20X cov.
 #-N number of hashes 4, -x min size of hash, -k kmer size, -C coverage cutoff
 # $(diginorm_pre).fq: $(sam2fq_pre).fq
-# 	echo -e "\nApply one-pass diginorm, coverage 20X\n\n" > $(write_to_log)
-# 	normalize-by-median.py -C 20 --paired -k 20 -N 4 -x 2.5e8 $^ 2> $(write_to_log)
+# 	echo -e "\nApply one-pass diginorm, coverage 20X\n\n" > $(log_file)
+# 	normalize-by-median.py -C 20 --paired -k 20 -N 4 -x 2.5e8 $^ 2> $(log_file)
 # 	mv $(sam2fq_pre).fq.keep $@
 
 #*************************Assembly Step**********************************************
 #*********************Meta-Ray*************
 raymeta/Contigs.fasta: $(sam2fq_pre)_pe.fq
-	@echo -e "\nAssembling reads with Ray Meta\n\n" > $(write_to_log)
-	mpiexec -n 16 Ray Meta -i $^ -o $(dir $@) 2> $(write_to_log)
+	@echo -e "\nAssembling reads with Ray Meta\n\n" > $(log_file)
+	mpiexec -n 16 Ray Meta -i $^ -o $(dir $@) 2> $(log_file)
 
 raymeta_contigs.fa: raymeta/Contigs.fasta
 	ln -s $^ $@
@@ -146,8 +147,8 @@ raymeta_contigs.fa: raymeta/Contigs.fasta
 #Qualities are not neccessary for Kraken/Blast classification
 fermi/fmdef.p4.fa.gz: $(sam2fq_pre)_pe.fq
 	mkdir -p fermi
-	cd fermi && run-fermi.pl -t $(threads) -c ../$^ > assembly.mak 2> $(write_to_log)
-	cd fermi && $(MAKE) -f assembly.mak -j $(threads) $(notdir $@) 2> $(write_to_log)
+	cd fermi && run-fermi.pl -t $(threads) -c ../$^ > assembly.mak 2> $(log_file)
+	cd fermi && $(MAKE) -f assembly.mak -j $(threads) $(notdir $@) 2> $(log_file)
 
 fermi_contigs.fa: fermi/fmdef.p4.fa.gz
 	gunzip -c $^ > $@
@@ -155,7 +156,7 @@ fermi_contigs.fa: fermi/fmdef.p4.fa.gz
 #*************************Abyss***********************
 abyss/abyssk47-contigs.fa: $(sam2fq_pre)_pe.fq
 	mkdir -p abyss
-	cd abyss && abyss-pe k=47 name='abyssk47' in='../$^' np=16 2> $(write_to_log)
+	cd abyss && abyss-pe k=47 name='abyssk47' in='../$^' np=16 2> $(log_file)
 
 abyss_contigs.fa: abyss/abyssk47-contigs.fa
 	ln -s $^ $@
@@ -163,33 +164,45 @@ abyss_contigs.fa: abyss/abyssk47-contigs.fa
 #*************************Filter low size contigs*****************************
 #Keep only contigs greater than 750bp
 raymeta_contigs_1k.fa fermi_contigs_1k.fa abyss_contigs_1k.fa: %_contigs_1k.fa : %_contigs.fa
-	seqtk seq -L 750 $^ > $@ 2> $(write_to_log)
+	seqtk seq -L 750 $^ > $@ 2> $(log_file)
 
 #*************************Taxonomy analysis**********************************
 
 #*************************Kraken - Salzberg**************************
 #Other flags: --fastq-input
 kraken_raymeta.out kraken_fermi.out kraken_abyss.out: kraken_%.out : %_contigs_1k.fa
-	@echo -e "\nClassifying $* contigs with Kraken\n\n" > $(write_to_log)
-	kraken --db $(kraken_db) --threads $(threads) $^ > $@ 2> $(write_to_log)
+	@echo -e "\nClassifying $* contigs with Kraken\n\n" > $(log_file)
+	kraken --db $(kraken_db) --threads $(threads) $^ > $@ 2> $(log_file)
 
 kraken_raymeta.report kraken_fermi.report kraken_abyss.report: kraken_%.report : kraken_%.out
-	@echo -e "\nCreating Kraken report for $* \n\n" > $(write_to_log)
-	kraken-report --db $(kraken_db) $^ > $@ 2> $(write_to_log)
+	@echo -e "\nCreating Kraken report for $* \n\n" > $(log_file)
+	kraken-report --db $(kraken_db) $^ > $@ 2> $(log_file)
 
 #************************Frag Gene Scan **********************************
 #Contig analysis
 raymeta_fgs.faa fermi_fgs.faa abyss_fgs.faa: %_fgs.faa : %_contigs_1k.fa
-	$(FragGeneScan_folder)/run_FragGeneScan.pl -genome=$^ -out=$*_fgs -complete=0 -train=illumina_10
+	$(FragGeneScan_folder)/run_FragGeneScan.pl -genome=$^ -out=$*_fgs -complete=0 -train=illumina_10 2> $(log_file)
 
 #All filtered reads analysis
-allreads_fgs.%: $(sam2fq_pre)_pe.fq $(sam2fq_pre)_se.fq
-	cat $^ | $(FragGeneScan_folder)/run_FragGeneScan.pl -genome=- -out=$*_fgs -complete=0 -train=illumina_10
+#Convert fq to fa
+$(sam2fq_pre)_%.fa: $(sam2fq_pre)_%.fq
+	seqtk seq -A $^ > $@ 2> $(log_file)
+	#sed -n '1~4s/^@/>/p;2~4p' $^
+
+reads_pe_fgs.faa reads_se_fgs.faa: reads_%_fgs.faa : $(sam2fq_pre)_%.fa
+	$(FragGeneScan_folder)/run_FragGeneScan.pl -genome=$< -out=$(basename $@) -complete=0 -train=illumina_10 2> $(log_file)
 
 #*************************PHmmer**************************
 #Optional --domtblout $(basename $@).dom
-raymeta_fgs_phmmer.tbl fermi_fgs_phmmer.tbl abyss_fgs_phmmer.tbl: %_fgs_phmmer.tbl: %_fgs.faa $(swissprot_fasta)
-	phmmer --cpu $(threads) --noali --tblout $@ $^ >/dev/null 2> $(write_to_log)
+reads_pe_fgs_phmmer.tbl reads_se_fgs_phmmer.tbl raymeta_fgs_phmmer.tbl fermi_fgs_phmmer.tbl abyss_fgs_phmmer.tbl: %_fgs_phmmer.tbl: %_fgs.faa $(swissprot_fasta)
+	phmmer --cpu $(threads) --noali --tblout $@ $^ >/dev/null 2> $(log_file)
+
+#************************Blast+*****************************
+#Blastx filtered contigs
+raymeta_fgs_blastx.xml fermi_fgs_blastx.xml abyss_fgs_blastx.xml: %_blastx.xml : %_contigs_1k.fa
+	blastx -query $^ -db $(blastdb_folder)/swissprot/swissprot -out $@ $(blast_params)
+
+#Blastp fgs proteins?
 
 #Run blast on contigs and output filtered results with <tool/script>
 #@TODO: Create script to filter blast xml output
