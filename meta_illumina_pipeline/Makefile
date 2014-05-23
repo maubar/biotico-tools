@@ -67,15 +67,16 @@ diginorm_pre:=$(sam2fq_pre)_dgnrm
 
 #Outputs
 kraken_reports:= kraken_raymeta.report kraken_fermi.report kraken_abyss.report
-phmmer_files := reads_pe_fgs_phmmer.tbl reads_se_fgs_phmmer.tbl raymeta_fgs_phmmer.tbl fermi_fgs_phmmer.tbl abyss_fgs_phmmer.tbl
-blastx_out := raymeta_fgs_blastx.xml fermi_fgs_blastx.xml abyss_fgs_blastx.xml
+phmmer_files := raymeta_fgs_phmmer.tbl fermi_fgs_phmmer.tbl abyss_fgs_phmmer.tbl
+blastp_out := raymeta_fgs_blastp.xml fermi_fgs_blastp.xml abyss_fgs_blastp.xml
+blastx_out := raymeta_blastx.xml fermi_blastx.xml abyss_blastx.xml
 
 #Delete produced files if step fails
 .DELETE_ON_ERROR:
 #Files produced by implicit rules are not deleted
 .SECONDARY:
 
-all: $(kraken_reports) $(phmmer_files) $(blastx_out)
+all: $(kraken_reports) $(phmmer_files)  $(blastp_out)
 	
 .PHONY: qc
 qc: $(nesoni_pre)_R1.fq_fastqc.zip $(nesoni_pre)_R2.fq_fastqc.zip $(nesoni_pre)_single.fq_fastqc.zip
@@ -192,29 +193,27 @@ $(sam2fq_pre)_%.fa: $(sam2fq_pre)_%.fq
 reads_pe_fgs.faa reads_se_fgs.faa: reads_%_fgs.faa : $(sam2fq_pre)_%.fa
 	$(FragGeneScan_folder)/run_FragGeneScan.pl -genome=$< -out=$(basename $@) -complete=0 -train=illumina_10 2> $(log_file)
 
-#*************************PHmmer**************************
+#*************************phmmer**************************
 #Optional --domtblout $(basename $@).dom
-reads_pe_fgs_phmmer.tbl reads_se_fgs_phmmer.tbl raymeta_fgs_phmmer.tbl fermi_fgs_phmmer.tbl abyss_fgs_phmmer.tbl: %_fgs_phmmer.tbl: %_fgs.faa $(swissprot_fasta)
+#Contigs
+raymeta_fgs_phmmer.tbl fermi_fgs_phmmer.tbl abyss_fgs_phmmer.tbl reads_pe_fgs_phmmer.tbl reads_se_fgs_phmmer.tbl: %_fgs_phmmer.tbl : %_fgs.faa $(swissprot_fasta)
 	phmmer --cpu $(threads) --noali --tblout $@ $^ >/dev/null 2> $(log_file)
 
 #************************Blast+*****************************
 #Blastx filtered contigs
-raymeta_fgs_blastx.xml fermi_fgs_blastx.xml abyss_fgs_blastx.xml: %_blastx.xml : %_contigs_1k.fa
-	blastx -query $^ -db $(blastdb_folder)/swissprot/swissprot -out $@ $(blast_params)
+#Uses differnt genetic code
+raymeta_blastx.xml fermi_blastx.xml abyss_blastx.xml: %_blastx.xml : %_contigs_1k.fa
+	blastx -query $< -db $(blastdb_folder)/nr/swissprot -query_genetic_code 11 -out $@ $(blast_params) 2> $(log_file)
 
-#Blastp fgs proteins?
+#Blastp fgs proteins
+#Reads and contigs , singletons only pending
+raymeta_fgs_blastp.xml fermi_fgs_blastp.xml abyss_fgs_blastp.xml reads_pe_fgs_blastp.xml reads_se_fgs_blastp.xml: %_fgs_blastp.xml: %_fgs.faa
+	blastp $(blast_params) -db $(blastdb_folder)/nr/swissprot -query $< -out $@  2> $(log_file)
 
-#Run blast on contigs and output filtered results with <tool/script>
-#@TODO: Create script to filter blast xml output
-# megablast.%.blst: contigs.fq
-# 	blastn -task megablast $(blast_params) $(megablast_params) -query $^ -db $(blastdb_path)/nt/nt > megablast.MAM.blst
-#  	touch megablast.BCT.blst
-# 	blastn -task megablast $(blast_params) $(megablast_params) -query $^ -db $(blastdb_path)/nt.split/nt.MAM > megablast.MAM.blst
-# 	blastn -task megablast $(blast_params) $(megablast_params) -query $^ -db $(blastdb_path)/nt.split/nt.BCT > megablast.BCT.blst
-
-#@TODO: Process blast output and output results
-# results.txt: megablast.MAM.blst megablast.BCT.blst
-# 	touch results.txt
+#Blastn - maybe contigs
+#megablast.%.blst: contigs.fq
+#	blastn -task megablast $(blast_params) $(megablast_params) -query $^ -db $(blastdb_path)/nt/nt > megablast.MAM.blst
+#	blastn -task megablast $(blast_params) $(megablast_params) -query $^ -db $(blastdb_path)/nt.split/nt.MAM > megablast.MAM.blst
 
 .PHONY :clean
 clean:
