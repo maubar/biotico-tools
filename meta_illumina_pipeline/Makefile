@@ -31,7 +31,7 @@
 SHELL := /bin/bash
 
 input_files := $(wildcard reads/*.fastq.gz) $(wildcard reads/*.fq.gz) $(wildcard reads/*.fq) $(wildcard reads/*.fastq)
-output_basename := P431_10x
+output_basename := sample_name
 
 #Run params
 threads:=16
@@ -68,7 +68,7 @@ diginorm_pre:=$(sam2fq_pre)_dgnrm
 #Outputs
 kraken_reports:= kraken_raymeta.report kraken_fermi.report kraken_abyss.report
 phmmer_files := raymeta_fgs_phmmer.tbl fermi_fgs_phmmer.tbl abyss_fgs_phmmer.tbl
-blastp_out := raymeta_fgs_blastp.xml fermi_fgs_blastp.xml abyss_fgs_blastp.xml
+blastp_out := raymeta_fgs_blastp.xml fermi_fgs_blastp.xml abyss_fgs_blastp.xml reads_pe_fgs_blastp.xml reads_se_fgs_blastp.xml
 blastx_out := raymeta_blastx.xml fermi_blastx.xml abyss_blastx.xml
 
 #Delete produced files if step fails
@@ -77,7 +77,7 @@ blastx_out := raymeta_blastx.xml fermi_blastx.xml abyss_blastx.xml
 .SECONDARY:
 
 all: $(kraken_reports) $(phmmer_files)  $(blastp_out)
-	
+
 .PHONY: qc
 qc: $(nesoni_pre)_R1.fq_fastqc.zip $(nesoni_pre)_R2.fq_fastqc.zip $(nesoni_pre)_single.fq_fastqc.zip
 
