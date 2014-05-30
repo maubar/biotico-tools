@@ -17,7 +17,7 @@ threads:=16
 #Avoids the deletion of files because of gnu make behavior with implicit rules
 .SECONDARY:
 
-all: sga_preproc.preqc k17.hist.pdf 
+all: sga_preproc.preqc k17.hist.pdf $(basename $(R1))_fastqc.zip $(basename $(R2))_fastqc.zip
 
 #*************************************************************************
 #SGA PREQC
