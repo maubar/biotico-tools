@@ -45,7 +45,7 @@ sga_preproc.sai: sga_preproc.fq
 #*************************************************************************
 #JELLYFISH 2
 #*************************************************************************
-k17.jf: sga_preqc.fq
+k17.jf: sga_preproc.fq
 	jellyfish2 count -s 8G -C -m 17 -t $(threads) -o $@ $^ 2>> $(log_file)
 
 k17.hist: k17.jf
@@ -62,7 +62,10 @@ k17.hist.pdf: k17.hist
 clean-tmp:
 	-rm sga_preproc.{fq,sai}
 	-rm *.log #Makefile log
-	-rm *.log.txt #Nesoni log
+	-rm *.sai *.bwt
+	-rm *.jf
 
 clean-out:
 	-rm *.fq_fastqc.zip #Fastqc
+	-rm *.hist *.hist.pdf #Jellyfish
+	-rm *.preqc *.pdf #SGA preqc
