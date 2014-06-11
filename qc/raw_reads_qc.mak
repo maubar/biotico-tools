@@ -17,7 +17,13 @@ threads:=16
 #Avoids the deletion of files because of gnu make behavior with implicit rules
 .SECONDARY:
 
-all: sga_preproc.preqc k17.hist.pdf $(basename $(R1))_fastqc.zip $(basename $(R2))_fastqc.zip
+all: sga_preproc_preqc.pdf k17.hist.pdf $(patsubst %.fastq.gz,%_fastqc.zip,$(R1) $(R2))
+
+#*************************************************************************
+#Import helper scripts - Check paths are ok
+#*************************************************************************
+plot_kmer_histogram.R:
+	ln -s /home/maubar/workspace/biotico-tools/meta_illumina_pipeline/qc/plot_kmer_histogram.R
 
 #*************************************************************************
 #SGA PREQC
@@ -34,24 +40,26 @@ sga_preproc.sai: sga_preproc.fq
 #Run SGA preqc
 %.preqc: %.fq %.sai
 	sga preqc -t $(threads) --force-EM $< > $@ 2>> $(log_file)
-	cd $(dir $@) && sga-preqc-report.py $(notdir $@)
+
+%_preqc.pdf: %.preqc
+	sga-preqc-report.py -o $(basename $@) $^
 
 #*************************************************************************
 #FASTQC
 #*************************************************************************
-%.fastq_fastqc.zip: %.fastq.gz
+%_fastqc.zip: %.fastq.gz
 	fastqc --noextract -k 10 $^ 2>> $(log_file)
 
 #*************************************************************************
 #JELLYFISH 2
 #*************************************************************************
-k17.jf: sga_preqc.fq
+k17.jf: sga_preproc.fq
 	jellyfish2 count -s 8G -C -m 17 -t $(threads) -o $@ $^ 2>> $(log_file)
 
 k17.hist: k17.jf
 	jellyfish2 histo -t $(threads) $^ -o $@ 2>> $(log_file)
 
-k17.hist.pdf: k17.hist
+k17.hist.pdf: k17.hist | plot_kmer_histogram.R
 	Rscript plot_kmer_histogram.R $^ $@
 
 #*************************************************************************
@@ -62,7 +70,11 @@ k17.hist.pdf: k17.hist
 clean-tmp:
 	-rm sga_preproc.{fq,sai}
 	-rm *.log #Makefile log
-	-rm *.log.txt #Nesoni log
+	-rm *.sai *.bwt
+	-rm *.jf
+	-rm plot_kmer_histogram.R
 
 clean-out:
-	-rm *.fq_fastqc.zip #Fastqc
+	-rm *_fastqc.zip #Fastqc
+	-rm *.hist *.hist.pdf #Jellyfish
+	-rm *.preqc *.pdf #SGA preqc
