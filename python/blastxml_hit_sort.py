@@ -48,11 +48,13 @@ def main(args):
 			#Store relevant fields in a tuple
 			if args.evalue:
 				sorting_key = hsp.expect
+				threshold = 0.001
 			elif args.bitscore:
 				sorting_key = hsp.bits
 
-			result = (sorting_key, it.query, it.query_length, hsp.align_length,hsp.identities,hsp.gaps, hit.hit_id, hit.hit_def )
-			results.append(result)
+			if sorting_key < threshold:
+				result = (sorting_key, it.query, it.query_length, hsp.align_length,hsp.identities,hsp.gaps, hit.hit_id, hit.hit_def, hsp.hseq , hsp.midline, hsp.qseq )
+				results.append(result)
 			#Limit number of hits to report
 			hit_num +=1
 			if hit_num == args.max_hits:
@@ -71,7 +73,10 @@ def main(args):
 	output_columns = [sort_col, "Query_id", "Query_length", "Alignment_length","Identities"," Gaps","Hit_ID", "Hit_name"]
 	args.output_file.write("\t".join(output_columns)+"\n")
 	for res in results:
-		args.output_file.write( "\t".join([str(x) for x in res])+"\n" )
+		args.output_file.write( "\t".join([str(x) for x in res[:8]])+"\n\n" )
+		args.output_file.write(res[8]+"\n")
+		args.output_file.write(res[9]+"\n")
+		args.output_file.write(res[10]+"\n\n")
 
 #*****************End of Main**********************
 def validate_args(args):
