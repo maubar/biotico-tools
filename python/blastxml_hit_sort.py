@@ -53,7 +53,7 @@ def main(args):
 				sorting_key = hsp.bits
 
 			if sorting_key < threshold:
-				result = (sorting_key, it.query, it.query_length, hsp.align_length,hsp.identities,hsp.gaps, hit.hit_id, hit.hit_def, hsp.hseq , hsp.midline, hsp.qseq )
+				result = (sorting_key, it.query, it.query_length, hsp.align_length,hsp.identities,hsp.gaps, hit.hit_id, hit.hit_def, hsp.sbjct , hsp.match, hsp.query )
 				results.append(result)
 			#Limit number of hits to report
 			hit_num +=1
