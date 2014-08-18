@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 Blast XML parser that extracts the best hits for each query sequence
-and presents the results in order by e-value or bitscore in
+and presents the results in order by e-value in
 tab-separated format
 
 Author: Mauricio Barrientos-Somarribas
@@ -40,7 +40,7 @@ def main(args):
 	results = []
 	iterations = NCBIXML.parse(args.blast_xml_file)
 
-	logging.info("Parsing XML file...\n")
+	logging.info("Parsing XML file...")
 	iteration_num = 0
 	for it in iterations:
 		hit_num = 0
@@ -64,11 +64,11 @@ def main(args):
 		if iteration_num % 2000 == 0 :
 			logging.info("\tIterations processed: "+str(iteration_num)+"\r")
 
-	logging.info("XML parsed!\n")
+	logging.info("XML parsed! " + str(iteration_num) + " iterations\n")
 
 	#Sort
 	logging.info("Sorting hits by e-value...\n")
-	results.sort(key=lambda x:x[0],reverse=args.bitscore)
+	results.sort(key=lambda x:x[0],reverse=False)
 	logging.info("Sort finished!\n")
 
 	#Write out sorted results to file
@@ -82,7 +82,8 @@ def main(args):
 			args.output_file.write(res[9]+"\n")
 			args.output_file.write(res[10]+"\n\n")
 	else:
-		 args.output_file.write( "\t".join([str(x) for x in res])+"\n" )
+		for res in results:
+			args.output_file.write( "\t".join([str(x) for x in res])+"\n" )
 
 #*****************End of Main**********************
 def validate_args(args):
