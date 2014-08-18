@@ -88,7 +88,7 @@ if __name__ == '__main__':
 		sequence and outputs them ordered by e-value")
 
 	parser.add_argument("blast_xml_file",help="Blast XML file to parse",nargs="?", type=file, default=sys.stdin)
-	parser.add_argument("-o","--output-file", type=file, default=sys.stdout, help="Name of the output file" )
+	parser.add_argument("-o","--output-file", type=argparse.FileType('w'), default=sys.stdout, help="Name of the output file" )
 	parser.add_argument("-l","--log-file", default=None, help="Name of the log file")
 
 	parser.add_argument("--max_hits",type=int,default="10",help="Max number of hits to report for each query sequence")
