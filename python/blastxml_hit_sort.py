@@ -41,42 +41,48 @@ def main(args):
 	iterations = NCBIXML.parse(args.blast_xml_file)
 
 	logging.info("Parsing XML file...\n")
+	iteration_num = 0
 	for it in iterations:
 		hit_num = 0
 		for hit in it.alignments:
 			hsp = hit.hsps[0] #Only first hsp
 			#Store relevant fields in a tuple
-			if args.evalue:
-				sorting_key = hsp.expect
-				threshold = 0.001
-			elif args.bitscore:
-				sorting_key = hsp.bits
 
-			if sorting_key < threshold:
-				result = (sorting_key, it.query, it.query_length, hsp.align_length,hsp.identities,hsp.gaps, hit.hit_id, hit.hit_def, hsp.sbjct , hsp.match, hsp.query )
+			if hsp.expect < args.threshold:
+				if args.alignments:
+					result = (hsp.expect, it.query, it.query_length, hsp.align_length,hsp.identities,hsp.gaps, hit.hit_id, hit.hit_def, hsp.sbjct , hsp.match, hsp.query )
+				else: #Do not keep alignment info in memory
+					result = (hsp.expect, it.query, it.query_length, hsp.align_length,hsp.identities,hsp.gaps, hit.hit_id, hit.hit_def)
+
 				results.append(result)
 			#Limit number of hits to report
 			hit_num +=1
 			if hit_num == args.max_hits:
 				break
+		#Keep track of number of iterations processed
+		iteration_num +=1
+		if iteration_num % 2000 == 0 :
+			logging.info("\tIterations processed: "+str(iteration_num)+"\r")
 
 	logging.info("XML parsed!\n")
 
 	#Sort
-	logging.info("Starting sort...\n")
+	logging.info("Sorting hits by e-value...\n")
 	results.sort(key=lambda x:x[0],reverse=args.bitscore)
-
 	logging.info("Sort finished!\n")
 
-	sort_col =  "E-value" if args.evalue else "Bitscore"
 	#Write out sorted results to file
-	output_columns = [sort_col, "Query_id", "Query_length", "Alignment_length","Identities"," Gaps","Hit_ID", "Hit_name"]
+	output_columns = ["E-value", "Query_id", "Query_length", "Alignment_length","Identities"," Gaps","Hit_ID", "Hit_name"]
 	args.output_file.write("\t".join(output_columns)+"\n")
-	for res in results:
-		args.output_file.write( "\t".join([str(x) for x in res[:8]])+"\n\n" )
-		args.output_file.write(res[8]+"\n")
-		args.output_file.write(res[9]+"\n")
-		args.output_file.write(res[10]+"\n\n")
+	if args.alignments:
+		#print with alignments
+		for res in results:
+			args.output_file.write( "\t".join([str(x) for x in res[:8]])+"\n\n" )
+			args.output_file.write(res[8]+"\n")
+			args.output_file.write(res[9]+"\n")
+			args.output_file.write(res[10]+"\n\n")
+	else:
+		 args.output_file.write( "\t".join([str(x) for x in res])+"\n" )
 
 #*****************End of Main**********************
 def validate_args(args):
@@ -92,10 +98,8 @@ if __name__ == '__main__':
 	parser.add_argument("-l","--log-file", default=None, help="Name of the log file")
 
 	parser.add_argument("--max_hits",type=int,default="10",help="Max number of hits to report for each query sequence")
-
-	sort_criteria = parser.add_mutually_exclusive_group(required=True)
-	sort_criteria.add_argument("-b","--bitscore",action="store_true",help="Sort hits from highest to lowest bitscore")
-	sort_criteria.add_argument("-e","--evalue",action="store_true", help="Sort hits from lowest to highest e-value")
+	parser.add_argument("-a","--alignments",action='store_true',help="Include a visualization for each alignment on the file")
+	parser.add_argument("-t","--threshold",type=float,default=1,help="Exclude hits with e-value lower than threshold. Default is '1' (all hits)")
 
 	args = parser.parse_args()
 
