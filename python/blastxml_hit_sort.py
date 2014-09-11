@@ -41,26 +41,22 @@ def main(args):
 	iterations = NCBIXML.parse(args.blast_xml_file)
 
 	logging.info("Parsing XML file...")
-	iteration_num = 0
-	for it in iterations:
-		hit_num = 0
-		for hit in it.alignments:
+	for iteration_num,it in enumerate(iterations):
+		for hit_num,hit in enumerate(it.alignments):
 			hsp = hit.hsps[0] #Only first hsp
 			#Store relevant fields in a tuple
-
 			if hsp.expect < args.threshold:
+				visual_alignment = None
 				if args.alignments:
-					result = (hsp.expect, it.query, it.query_length, hsp.align_length,hsp.identities,hsp.gaps, hit.hit_id, hit.hit_def, hsp.sbjct , hsp.match, hsp.query )
-				else: #Do not keep alignment info in memory
-					result = (hsp.expect, it.query, it.query_length, hsp.align_length,hsp.identities,hsp.gaps, hit.hit_id, hit.hit_def)
+					visual_alignment = (hsp.sbjct_start, hsp.sbjct, hsp.sbjct_end, hsp.match, hsp.query_start,hsp.query,hsp.query_end )
+				result = (hsp.expect, it.query, it.query_length, hsp.align_length,hsp.identities, hsp.positives, hsp.gaps, hit.hit_id, hit.hit_def, visual_alignment)
 
 				results.append(result)
+
 			#Limit number of hits to report
-			hit_num +=1
-			if hit_num == args.max_hits:
+			if hit_num >= (args.max_hits-1):
 				break
 		#Keep track of number of iterations processed
-		iteration_num +=1
 		if iteration_num % 2000 == 0 :
 			logging.info("\tIterations processed: "+str(iteration_num)+"\r")
 
@@ -72,20 +68,36 @@ def main(args):
 	logging.info("Sort finished!\n")
 
 	#Write out sorted results to file
-	output_columns = ["E-value", "Query_id", "Query_length", "Alignment_length","Identities"," Gaps","Hit_ID", "Hit_name"]
+	output_columns = ["E-value", "Query_id", "Query_length", "Alignment_length","Identities","Positives"," Gaps","Hit_ID", "Hit_name"]
 	args.output_file.write("\t".join(output_columns)+"\n")
-	if args.alignments:
-		#print with alignments
-		for res in results:
-			args.output_file.write( "\t".join([str(x) for x in res[:8]])+"\n\n" )
-			args.output_file.write(res[8]+"\n")
-			args.output_file.write(res[9]+"\n")
-			args.output_file.write(res[10]+"\n\n")
-	else:
-		for res in results:
-			args.output_file.write( "\t".join([str(x) for x in res])+"\n" )
+	for res in results:
+		args.output_file.write( "\t".join([str(x) for x in res[:9]])+"\n")
+		if args.alignments:
+			#print alignments as well
+				alignment = res[9]
+				args.output_file.write( "\n"+formatAlignment(alignment)+"\n\n" )
+
 
 #*****************End of Main**********************
+#alignment receives a tuple with the following fields:
+#	hsp.sbjct_start, hsp.sbjct, hsp.sbjct_end, hsp.match, hsp.query_start,hsp.query,hsp.query_end
+def formatAlignment(alignment):
+	ref_line = "\tRef: "+str(alignment[0])
+	qry_line = "\tQry: "+str(alignment[4])
+	separator = "\t"
+	#Space padding
+	ref_line += (" " * max(0,len(qry_line)-len(ref_line)-1) )+ separator
+	qry_line += (" " * max(0,len(ref_line)-len(qry_line)-1) )+ separator
+
+	midline = "\t"+(" " * (len(ref_line)-2) )+ separator
+
+	#Add sequences , padding and end coordinates
+	ref_line += alignment[1] + separator + str(alignment[2])
+	midline += alignment[3]
+	qry_line += alignment[5] + separator + str(alignment[6])
+
+	return ref_line+"\n"+midline+"\n"+qry_line
+
 def validate_args(args):
 	return True
 
