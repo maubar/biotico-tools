@@ -59,7 +59,7 @@ def main(args):
 						if args.alignments:
 							visual_alignment = (hsp.sbjct_start, hsp.sbjct, hsp.sbjct_end, hsp.match, hsp.query_start,hsp.query,hsp.query_end )
 						species = extract_species_name(hit.hit_def,blast_type)
-						pct_id, pct_pos, qcov = calc_hsp_stats(hsp, it.query_length)
+						pct_id, pct_pos, q_cov = calc_hsp_stats(hsp, it.query_length)
 						result = (hsp.expect,
 								species,
 								it.query_length,
@@ -70,6 +70,7 @@ def main(args):
 								assembler,
 								blast_type,
 								database,
+								hit.hit_def,
 								visual_alignment)
 						results.append(result)
 
@@ -90,10 +91,10 @@ def main(args):
 	output_columns = ["e-value", "species", "seq_len", "q_cov","pct_id","pct_pos","ctg_id", "asm", "tool", "database","other"]
 	args.output_file.write("\t".join(output_columns)+"\n")
 	for res in results:
-		args.output_file.write( "\t".join([str(x) for x in res[:9]])+"\n")
+		args.output_file.write( "\t".join([str(x) for x in res[:11]])+"\n")
 		if args.alignments:
 			#print alignments as well
-				alignment = res[9]
+				alignment = res[11]
 				args.output_file.write( "\n"+formatAlignment(alignment)+"\n\n" )
 
 
