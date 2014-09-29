@@ -59,7 +59,7 @@ def main(args):
 						if args.alignments:
 							visual_alignment = (hsp.sbjct_start, hsp.sbjct, hsp.sbjct_end, hsp.match, hsp.query_start,hsp.query,hsp.query_end )
 						species = extract_species_name(hit.hit_def,blast_type)
-						q_cov , pct_id, pct_pos = calc_hsp_stats(hsp, it.query_length)
+						pct_id, pct_pos, qcov = calc_hsp_stats(hsp, it.query_length)
 						result = (hsp.expect,
 								species,
 								it.query_length,
