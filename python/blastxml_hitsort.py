@@ -25,7 +25,7 @@ limitations under the License.
 import sys
 import argparse
 import os.path
-
+import re
 #Time of script execution and logging module
 import time
 import logging
@@ -49,8 +49,17 @@ def main(args):
 				visual_alignment = None
 				if args.alignments:
 					visual_alignment = (hsp.sbjct_start, hsp.sbjct, hsp.sbjct_end, hsp.match, hsp.query_start,hsp.query,hsp.query_end )
-				result = (hsp.expect, it.query, it.query_length, hsp.align_length,hsp.identities, hsp.positives, hsp.gaps, hit.hit_id, hit.hit_def, visual_alignment)
-
+				species = extract_species_name(hit.hit_def)
+				pct_id, pct_pos, q_cov = calc_hsp_stats(hsp, it.query_length)
+				result = (hsp.expect,
+						species,
+						it.query_length,
+						q_cov,
+						pct_id,
+						pct_pos,
+						it.query,
+						hit.hit_def,
+						visual_alignment)
 				results.append(result)
 
 			#Limit number of hits to report
@@ -68,13 +77,13 @@ def main(args):
 	logging.info("Sort finished!\n")
 
 	#Write out sorted results to file
-	output_columns = ["E-value", "Query_id", "Query_length", "Alignment_length","Identities","Positives"," Gaps","Hit_ID", "Hit_name"]
+	output_columns = ["e-value", "species", "seq_len", "q_cov","pct_id","pct_pos","ctg_id","other"]
 	args.output_file.write("\t".join(output_columns)+"\n")
 	for res in results:
-		args.output_file.write( "\t".join([str(x) for x in res[:9]])+"\n")
+		args.output_file.write( "\t".join([str(x) for x in res[:8]])+"\n")
 		if args.alignments:
 			#print alignments as well
-				alignment = res[9]
+				alignment = res[8]
 				args.output_file.write( "\n"+formatAlignment(alignment)+"\n\n" )
 
 
@@ -97,6 +106,22 @@ def formatAlignment(alignment):
 	qry_line += alignment[5] + separator + str(alignment[6])
 
 	return ref_line+"\n"+midline+"\n"+qry_line
+
+def extract_species_name(hit_name):
+	species = hit_name
+	blastx_species = re.search(r".+\[(.+?)\]$",species)
+	if blastx_species:
+		species = blastx_species.group(1)
+	else:
+		species = hit_name.split(",")[0]
+	return species
+
+#Calculates percent identity, percent positives and query coverage
+def calc_hsp_stats( hsp , qseq_len):
+	pct_id = 100.0 * hsp.identities / hsp.align_length
+	pct_pos = 100.0 * hsp.positives / hsp.align_length
+	qcov = 100.0 * (hsp.query_end - hsp.query_start) / qseq_len
+	return pct_id, pct_pos, qcov
 
 def validate_args(args):
 	return True

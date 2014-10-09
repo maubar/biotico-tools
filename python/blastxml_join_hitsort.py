@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 """
-Blast XML parser that extracts the best hits for each query sequence
-and presents the results in order by e-value in
-tab-separated format
+Blast XML parser that extracts and aggregates the hits from different blast.xml files,
+and presents them in a tab-separated format ordered by e-value (or bitscore).
+
+Requires filenames to finish in _tool_blast[nxp]_database.xml
 
 Author: Mauricio Barrientos-Somarribas
 Email:  mauricio.barrientos@ki.se
@@ -39,11 +40,17 @@ from Bio.Blast import NCBIXML
 #****************Begin of Main ***************
 def main(args):
 	filenames = extract_blast_filenames( args.root_folder )
-	#Filter only refseqvir
-	filtered_filenames = filter(lambda x:"refseqvir" in x, filenames)
+
+	files_to_process= filenames
+	#Filters
+	if args.filter:
+		files_to_process = filter(lambda x:args.filter in x, files_to_process)
+	if args.filter_out:
+		files_to_process = filter(lambda x: args.filter_out not in x, files_to_process)
+
 	#Where hits will be accumulated
 	results = []
-	for blast_file in filtered_filenames:
+	for blast_file in files_to_process:
 		logging.info("Processing file: "+blast_file)
 		assembler, blast_type , database = extract_metadata_from_blast_filename(blast_file)
 		with open(blast_file,"r") as blast_fh:
@@ -136,26 +143,17 @@ def calc_hsp_stats( hsp , qseq_len):
 
 def extract_metadata_from_blast_filename(filename):
 	basename = os.path.basename(filename)
-	asm_idx = basename.find("_asm_")
-	if asm_idx > -1:
-		fields = basename[asm_idx+1:].split("_")
-		assembler = fields[1]
-		tool = fields[2]
-		db = fields[3].split(".xml")[0]
-#paired-end or singletons
-	else:
-		match = re.search(r"_([^_]+?)_(blast[nxp])_([^_]+?)\.xml$",basename)
-		if match:
-			assembler = match.group(1)
-			tool = match.group(2)
-			db = match.group(3)
+	match = re.search(r"_([^_]+?)_(blast[nxp])_([^_]+?)\.xml$",basename)
+	if match:
+		assembler = match.group(1)
+		tool = match.group(2)
+		db = match.group(3)
 	return assembler,tool,db
 
 def extract_blast_filenames(root_path):
 	filenames = []
 	for root_folder,dirs,files in os.walk(root_path):
-		if "blast" in root_folder:
-			filenames += [os.path.join(root_folder,f) for f in files if f.endswith(".xml") ]
+		filenames += [os.path.join(root_folder,f) for f in files if f.endswith(".xml") and "blast" in f ]
 	return filenames
 
 def validate_args(args):
@@ -164,7 +162,7 @@ def validate_args(args):
 if __name__ == '__main__':
 	#Process command line arguments
 	parser = argparse.ArgumentParser(description="The program extracts the highest scoring hits for each query \
-		sequence and outputs them ordered by e-value")
+		sequence and outputs them ordered by e-value. Requires filenames to finish in _tool_blast[nxp]_database.xml")
 
 	parser.add_argument("root_folder",help="Folder in which to look for blast xml files", default="./")
 	parser.add_argument("-o","--output-file", type=argparse.FileType('w'), default=sys.stdout, help="Name of the output file" )
@@ -173,6 +171,9 @@ if __name__ == '__main__':
 	parser.add_argument("--max_hits",type=int,default="10",help="Max number of hits to report for each query sequence")
 	parser.add_argument("-a","--alignments",action='store_true',help="Include a visualization for each alignment on the file")
 	parser.add_argument("-t","--threshold",type=float,default=1,help="Exclude hits with e-value lower than threshold. Default is '1' (all hits)")
+
+	parser.add_argument("-f","--filter",type=str,help="Only process files that contain the filter string")
+	parser.add_argument("-F","--filter-out",type=str,help="Only process files that DO NOT contain the filter string")
 
 	args = parser.parse_args()
 
