@@ -11,36 +11,41 @@ import itertools
 # from collections import *
 # import random
 
-import multiprocessing
+import multiprocessing as mp
 from Bio.Blast import NCBIXML
-
 
 def main():
 	args = create_argparser()
 	files_to_process = get_files_to_process(args)
-	process_pool = multiprocessing.Pool(args.num_proc)
-	hits_per_file = process_pool.map(blastxml_parser, files_to_process)
+	process_pool = mp.Pool(args.num_proc)
+	sys.stderr.write("Files to process:\n\t{}\n".format("\n\t".join(files_to_process)))
+	hits_per_file = process_pool.map(blastxml_parser(args), files_to_process)
+	sys.stderr.write("Sorting...")
 	merged_hits = merge_and_sort_hits( hits_per_file )
-	write_hits_to_file(merged_hits,args.output_file)
+	sys.stderr.write("Total sorted hits: {}\n".format(len(merged_hits)))
+	write_hits_to_file(merged_hits,args.output_file,args.alignments)
 
 
-def blastxml_parser_factory(args):
-	eval_threshold = args.threshold
-	include_alignment = args.alignments
-	max_hits = args.max_hits
+class blastxml_parser():
+	def __init__(self,args):
+		self.eval_threshold = args.threshold
+		self.include_alignment = args.alignments
+		self.max_hits = args.max_hits
 
-	def _blastxml_parser(blast_filename):
+	def __call__(self,blast_filename):
 		hits = []
 		with open(blast_filename,"r") as blast_fh:
 			iterations = NCBIXML.parse(blast_fh)
+			formatted_source_file = format_source_file(blast_filename)
+			sys.stderr.write("Processing {}\n".format(blast_filename))
 			for iteration in iterations:
-				iteration_hits = process_iteration(iteration, eval_threshold, blast_filename, include_alignment, max_hits)
+				iteration_hits = process_iteration(iteration, self.eval_threshold,formatted_source_file, self.include_alignment, self.max_hits)
 				if iteration_hits:
 					hits += iteration_hits
+			sys.stderr.write("Finished processing {}, {} hits kept\n".format(blast_filename,len(hits)))
 		return hits
-	return _blastxml_parser
 
-def process_iteration(iteration_obj,eval_threshold, source_file, include_alignment=False,max_hits=1):
+def process_iteration(iteration_obj,eval_threshold, source_file, include_alignment,max_hits):
 	iteration_hits = []
 	for hit_num,hit in enumerate(iteration_obj.alignments):
 		hsp = hit.hsps[0] #Only first hsp
@@ -68,6 +73,9 @@ def process_iteration(iteration_obj,eval_threshold, source_file, include_alignme
 			break
 	return iteration_hits
 
+def format_source_file(source_file):
+	return os.path.basename(source_file).rsplit(".")[0]
+	
 #Ideally annotate from TaxID
 def extract_species_name(hit_name):
 	species = hit_name
@@ -86,27 +94,27 @@ def calc_hsp_stats( hsp , qseq_len):
 	return pct_id, pct_pos, q_cov
 
 def merge_and_sort_hits(hits_per_file):
-	combined_hits = [x for x in itertools.chain(hits_per_file)]
+	combined_hits = [x for x in itertools.chain(*hits_per_file)]
 	combined_hits.sort(key=lambda item:item[0],reverse=False)
 	return combined_hits
 
 def write_hits_to_file(hits,out_fh,write_alignments=False):
-	output_columns = ["e-value", "species", "seq_len", "q_cov","pct_id","pct_pos","ctg_id","other"]
+	output_columns = ["e-value", "species", "seq_len", "q_cov","pct_id","pct_pos","ctg_id","source","hit_name"]
 	out_fh.write("\t".join(output_columns)+"\n")
 	for res in hits:
-		out_fh.write( "\t".join([str(x) for x in res[:8]])+"\n")
+		out_fh.write( "\t".join([str(x) for x in res[:9]])+"\n")
 		if write_alignments:
 			#print alignments as well
-			alignment = res[8]
+			alignment = res[9]
 			out_fh.write( "\n"+formatAlignment(alignment)+"\n\n" )
 
 # Alignment receives a tuple with the following fields:
 # hsp.sbjct_start, hsp.sbjct, hsp.sbjct_end, hsp.match, hsp.query_start,hsp.query,hsp.query_end
 def formatAlignment(alignment,space_padding="   "):
-	pos_padding = max(len(alignment[0]), len(alignment[4]) )
+	pos_padding = max(len(str(alignment[0])), len(str(alignment[4])) )
 
-	ref_line = space_padding + "   Ref: {: <"+ str(pos_padding) + "}{}".format( alignment[0] , space_padding )
-	qry_line = space_padding + "   Qry: {: <"+ str(pos_padding) + "}{}".format( alignment[4] , space_padding )
+	ref_line = space_padding + ("   Ref: {: <"+ str(pos_padding) + "}{}").format( alignment[0] , space_padding )
+	qry_line = space_padding + ("   Qry: {: <"+ str(pos_padding) + "}{}").format( alignment[4] , space_padding )
 	midline = " " * len(ref_line)
 
 	#Add sequences , padding and end coordinates
