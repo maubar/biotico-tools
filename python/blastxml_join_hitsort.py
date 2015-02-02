@@ -130,7 +130,7 @@ def extract_species_name(hit_name,blast_type):
 	if blast_type == 'blastn':
 		species = hit_name.split(",")[0]
 	elif blast_type in ['blastp','blastx']:
-		species = hit_name.split("[")[1].split("]")[0]
+		species = hit_name.split("[")[1].split("]")[0] if "[" in hit_name else hit_name
 	return species
 
 #Calculates percent identity, percent positives and query coverage
