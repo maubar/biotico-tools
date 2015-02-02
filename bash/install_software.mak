@@ -106,9 +106,8 @@ pandaseq:
 	echo "Requires zlib, bzip2 and libtool"
 	#sudo apt-get install zlib1g-dev libbz2-dev libltdl-dev libtool
 	git clone http://github.com/neufeld/pandaseq.git/
-	cd pandaseq
-	./autogen.sh && ./configure --prefix=`pwd`/dist && make && make install && make clean
-	cp pandaseq/dist/bin/* bin/*
+	cd pandaseq && bash autogen.sh && ./configure --prefix=`pwd`/dist && make && make install && make clean
+	cp pandaseq/dist/bin/* bin/
 
 #**************************************************************************************
 #******************        READ MAPPERS/ALIGNERS     **********************************
@@ -161,7 +160,7 @@ kmc:
 	cp kmc/* bin/
 
 #Assumes python 3 install from anaconda in a virtual env called py3k
-iva: Fastaq MUMmer smalt samtools
+iva: Fastaq MUMmer smalt 
 	$(pip_python3) install networkx
 	$(pip_python3) install pysam
 	wget -N https://github.com/sanger-pathogens/iva/archive/v0.11.0.tar.gz
@@ -174,14 +173,14 @@ MUMmer:
 	tar -xzf MUMmer*.tar.gz
 	mv MUMmer*/ MUMmer
 	cd MUMmer && make install
-	for x in `find MUMmer/ -maxdepth 1 -executable -not -type d -exec basename {} \; `; do ln `pwd`/MUMmer/$x bin/$x ; done
+	for x in `find MUMmer/ -maxdepth 1 -executable -not -type d -exec basename {} \;`; do ln -sf `pwd`/MUMmer/$$x bin/$$x ; done
 
 smalt:
 	wget -N http://downloads.sourceforge.net/project/smalt/smalt-0.7.6-static.tar.gz
 	tar -xzf smalt*.tar.gz
 	mv smalt*/ smalt/
 	cd smalt && mkdir -p dist && ./configure --prefix=`pwd`/dist && make install
-	cp smalt/dist/bin/* bin/*
+	cp smalt/dist/bin/* bin/
 
 #SGA and sga-dependencies
 sga: sparsehash bamtools jemalloc
@@ -235,8 +234,8 @@ hmmer:
 
 diamond:
 	wget http://www-ab.informatik.uni-tuebingen.de/data/software/diamond/download/public/diamond-intel64-linux.tar.gz
-	tar -xzf diamond*.tar.gz
-	mv diamond bin/
+	mkdir -p diamond && cd diamond && tar -xzf diamond*.tar.gz
+	cp diamond/diamond bin/
 
 kraken:
 	wget -N http://ccb.jhu.edu/software/kraken/dl/kraken-0.10.4-beta.tgz
@@ -244,4 +243,4 @@ kraken:
 	mv kraken*/ kraken
 	mkdir -p kraken/dist
 	cd kraken && bash install_kraken.sh dist/
-	cp kraken/dist/* bin/
+	cp -f kraken/dist/* bin/
