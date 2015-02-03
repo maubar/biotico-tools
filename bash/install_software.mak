@@ -109,6 +109,14 @@ pandaseq:
 	cd pandaseq && bash autogen.sh && ./configure --prefix=`pwd`/dist && make && make install && make clean
 	cp pandaseq/dist/bin/* bin/
 
+FLASH:
+	wget -N http://downloads.sourceforge.net/project/flashpage/FLASH-1.2.11.tar.gz
+	tar -xzf FLASH-*.tar.gz
+	mv FLASH-*/ FLASH/
+	cd FLASH && make
+	cp FLASH/flash bin/
+
+
 #**************************************************************************************
 #******************        READ MAPPERS/ALIGNERS     **********************************
 #**************************************************************************************
@@ -160,7 +168,7 @@ kmc:
 	cp kmc/* bin/
 
 #Assumes python 3 install from anaconda in a virtual env called py3k
-iva: Fastaq MUMmer smalt 
+iva: Fastaq MUMmer smalt kmc
 	$(pip_python3) install networkx
 	$(pip_python3) install pysam
 	wget -N https://github.com/sanger-pathogens/iva/archive/v0.11.0.tar.gz
