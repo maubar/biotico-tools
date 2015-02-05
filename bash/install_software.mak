@@ -10,6 +10,8 @@ SHELL := /bin/bash
 
 ROOT_FOLDER := $(shell pwd)
 
+LINK_TO_BIN = ln -st bin/ $(1)
+
 #Python configuration.
 # Commands like pip or python might require sudo or a virtualenv
 pip_python2 := pip
@@ -51,17 +53,17 @@ $(shell mkdir -p bin/)
 seqtk/:
 	git clone https://github.com/lh3/seqtk.git
 	cd seqtk && make
-	cp seqtk/seqtk bin/
+	$(call LINK_TO_BIN,`pwd`/seqtk/seqtk)
 
 samtools/:
-	wget http://sourceforge.net/projects/samtools/files/latest/download?source=files -O samtools.tar.bz2
-	tar -xjf samtools.tar.bz2
+	wget -N https://github.com/samtools/samtools/releases/download/1.2/samtools-1.2.tar.bz2
+	tar -xjf samtools-*.tar.bz2
 	mv samtools-*/ samtools/
 	cd samtools/ && make
-	cp samtools/samtools bin/
+	$(call LINK_TO_BIN,`pwd`/samtools/samtools)
 
 picard-tools/:
-	wget -N https://github.com/broadinstitute/picard/releases/download/1.124/picard-tools-1.124.zip
+	wget -N https://github.com/broadinstitute/picard/releases/download/1.128/picard-tools-1.128.zip
 	unzip picard-tools-*.zip
 	mv picard-tools-*/ picard-tools/
 
@@ -77,14 +79,14 @@ fastqc:
 	chmod ug+x fastqc/fastqc
 	@echo "This installation assumes you have at least 16 gigs of ram"
 	sed -i "s/Xmx250m/Xmx16g/" fastqc/fastqc
-	cd bin && ln -sf ../fastqc/fastqc
+	$(call LINK_TO_BIN,`pwd`/fastqc/fastqc)
 
 prinseq/:
 	wget http://sourceforge.net/projects/prinseq/files/standalone/prinseq-lite-0.20.4.tar.gz/download -O prinseq.tar.gz
 	tar -xzf prinseq.tar.gz
 	mv prinseq-* prinseq/
-	cp prinseq/prinseq-lite.pl bin/
-	chmod ug+x bin/prinseq-lite.pl
+	chmod ug+x prinseq/prinseq-lite.pl
+	$(call LINK_TO_BIN,`pwd`/prinseq/prinseq-lite.pl)
 
 jellyfish2:
 	echo "No rule available yet" && exit 1
@@ -100,30 +102,32 @@ fqtrim:
 	tar -xzf fqtrim-*.tar.gz
 	mv fqtrim-*/ fqtrim
 	cd fqtrim && make release
-	cp fqtrim/fqtrim bin/
+	$(call LINK_TO_BIN,`pwd`/fqtrim/fqtrim)
 
 pandaseq:
 	echo "Requires zlib, bzip2 and libtool"
 	#sudo apt-get install zlib1g-dev libbz2-dev libltdl-dev libtool
 	git clone http://github.com/neufeld/pandaseq.git/
 	cd pandaseq && bash autogen.sh && ./configure --prefix=`pwd`/dist && make && make install && make clean
-	cp pandaseq/dist/bin/* bin/
+	$(call LINK_TO_BIN,`pwd`/pandaseq/dist/bin/*)
 
 FLASH:
 	wget -N http://downloads.sourceforge.net/project/flashpage/FLASH-1.2.11.tar.gz
 	tar -xzf FLASH-*.tar.gz
 	mv FLASH-*/ FLASH/
 	cd FLASH && make
-	cp FLASH/flash bin/
+	$(call LINK_TO_BIN,`pwd`/FLASH/flash)
 
 
 #**************************************************************************************
 #******************        READ MAPPERS/ALIGNERS     **********************************
 #**************************************************************************************
 bwa/:
-	wget -N http://sourceforge.net/projects/bio-bwa/files/latest/download?source=files -O bwa.tar.bz2
-	tar -xjf bwa.tar.bz2
-	cp bwa.kit/bwa bin/
+	wget -N http://downloads.sourceforge.net/project/bio-bwa/bwa-0.7.12.tar.bz2
+	tar -xjf bwa-*.tar.bz2
+	mv bwa-*/ bwa
+	cd bwa && make
+	$(call LINK_TO_BIN,`pwd`/bwa/bwa)
 
 #Requires python2.x and python2.x-config, where x = 6 or 7
 #This is breaking, maybe requires python-dev package?
@@ -132,7 +136,7 @@ stampy/:
 	tar -xzf Stampy-latest.tgz
 	mv stampy-*/ stampy
 	cd stampy && make
-	cd bin && ln -s ../stampy/stampy.py
+	$(call LINK_TO_BIN,`pwd`/stampy/stampy.py)
 
 #**************************************************************************************
 #******************        ASSEMBLERS     *********************************************
@@ -143,21 +147,20 @@ fermi:
 	tar -xjf fermi-*
 	mv fermi-*/ fermi
 	cd fermi && make
-	cp fermi/fermi bin/
-	cp fermi/run-fermi.pl bin/
+	$(call LINK_TO_BIN,`pwd`/$@/{fermi,run_fermi.pl})
 
 megahit:
 	git clone https://github.com/voutcn/megahit.git
 	cd megahit && make
-	cp megahit/megahit bin/
+	$(call LINK_TO_BIN,`pwd`/$@/{megahit*,sdbg_builder_cpu})
 
 SPAdes:
 	wget -N http://spades.bioinf.spbau.ru/release3.5.0/SPAdes-3.5.0-Linux.tar.gz
 	tar -xzf SPAdes*.tar.gz && mv SPAdes-*/ SPAdes
-	cp SPAdes/bin/* bin/
+	$(call LINK_TO_BIN,`pwd`/$@/bin/*)
 
 #Assumes python3 installed from anaconda in a virtualenv called py3k
-Fastaq/:
+Fastaq:
 	git clone https://github.com/sanger-pathogens/Fastaq.git
 	cd Fastaq && $(python3_bin) setup.py install
 
@@ -165,7 +168,7 @@ kmc:
 	mkdir -p kmc/
 	cd kmc && wget -N http://sun.aei.polsl.pl/kmc/download-2.1.1/linux/kmc
 	cd kmc && wget -N http://sun.aei.polsl.pl/kmc/download-2.1.1/linux/kmc_dump
-	cp kmc/* bin/
+	$(call LINK_TO_BIN,`pwd`/$@/*)
 
 #Assumes python 3 install from anaconda in a virtual env called py3k
 iva: Fastaq MUMmer smalt kmc
@@ -181,14 +184,14 @@ MUMmer:
 	tar -xzf MUMmer*.tar.gz
 	mv MUMmer*/ MUMmer
 	cd MUMmer && make install
-	for x in `find MUMmer/ -maxdepth 1 -executable -not -type d -exec basename {} \;`; do ln -sf `pwd`/MUMmer/$$x bin/$$x ; done
+	find MUMmer/ -maxdepth 1 -executable -not -type d -exec ln -st bin/ `pwd`/{} \;
 
 smalt:
 	wget -N http://downloads.sourceforge.net/project/smalt/smalt-0.7.6-static.tar.gz
 	tar -xzf smalt*.tar.gz
 	mv smalt*/ smalt/
 	cd smalt && mkdir -p dist && ./configure --prefix=`pwd`/dist && make install
-	cp smalt/dist/bin/* bin/
+	$(call LINK_TO_BIN,`pwd`/$@/dist/bin/*)
 
 #SGA and sga-dependencies
 sga: sparsehash bamtools jemalloc
@@ -197,7 +200,7 @@ sga: sparsehash bamtools jemalloc
 	cd sga/src && ./configure --with-sparsehash=$(ROOT_FOLDER)/sparsehash --with-bamtools=$(ROOT_FOLDER)/bamtools --with-jemalloc=$(ROOT_FOLDER)/jemalloc/lib --prefix=$(ROOT_FOLDER)
 	cd sga/src && make && make install
 	#Copy preqc report script to bin
-	cp sga/src/bin/sga-preqc-report.py bin/
+	$(call LINK_TO_BIN,`pwd`/$@/src/bin/*)
 
 sparsehash:
 	wget -N https://sparsehash.googlecode.com/files/sparsehash-2.0.2.tar.gz
@@ -215,6 +218,14 @@ jemalloc:
 	tar -xjf jemalloc-*.tar.bz2
 	cd jemalloc-*/ && ./configure --prefix=$(ROOT_FOLDER)/jemalloc && make && make install
 
+#**************************************************************************************
+#******************        ASSEMBLY EVAL     *********************************************
+#**************************************************************************************
+assemblathon2-analysis:
+	git clone https://github.com/ucdavis-bioinformatics/assemblathon2-analysis.git
+	chmod ug+x $@/assemblathon-stats.pl
+	$(call LINK_TO_BIN,`pwd`/$@/assemblathon-stats.pl)
+
 #************************************************************************
 #******************    GENE PREDICTION       ****************************
 #************************************************************************
@@ -231,19 +242,19 @@ ncbi-blast:
 	wget -N ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/ncbi-blast-2.2.??+-x64-linux.tar.gz
 	tar -xzf ncbi-blast*.tar.gz
 	mv ncbi-blast-*/ ncbi-blast
-	cp ncbi-blast/bin/* bin
+	$(call LINK_TO_BIN,`pwd`/$@/bin/*)
 
 hmmer:
 	wget -N ftp://selab.janelia.org/pub/software/hmmer3/3.1b1/hmmer-*-linux-intel-x86_64.tar.gz
 	tar -xzf hmmer-*-linux-intel-*.tar.gz
 	mv hmmer-*/ hmmer
-	cp hmmer/binaries/?hmm* bin/
-	cp hmmer/binaries/hmm* bin/
+	$(call LINK_TO_BIN,`pwd`/$@/binaries/?hmm*)
+	$(call LINK_TO_BIN,`pwd`/$@/binaries/hmm*)
 
 diamond:
 	wget http://www-ab.informatik.uni-tuebingen.de/data/software/diamond/download/public/diamond-intel64-linux.tar.gz
 	mkdir -p diamond && cd diamond && tar -xzf diamond*.tar.gz
-	cp diamond/diamond bin/
+	$(call LINK_TO_BIN,`pwd`/$@/diamond)
 
 kraken:
 	wget -N http://ccb.jhu.edu/software/kraken/dl/kraken-0.10.4-beta.tgz
@@ -251,4 +262,4 @@ kraken:
 	mv kraken*/ kraken
 	mkdir -p kraken/dist
 	cd kraken && bash install_kraken.sh dist/
-	cp -f kraken/dist/* bin/
+	$(call LINK_TO_BIN,`pwd`/$@/dist/*)
