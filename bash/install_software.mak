@@ -252,8 +252,8 @@ hmmer:
 	$(call LINK_TO_BIN,`pwd`/$@/binaries/hmm*)
 
 diamond:
-	wget http://www-ab.informatik.uni-tuebingen.de/data/software/diamond/download/public/diamond-intel64-linux.tar.gz
-	mkdir -p diamond && cd diamond && tar -xzf diamond*.tar.gz
+	wget -N http://www-ab.informatik.uni-tuebingen.de/data/software/diamond/download/public/diamond-linux64.tar.gz
+	mkdir -p diamond/ && cd diamond && tar -xzf ../diamond*.tar.gz
 	$(call LINK_TO_BIN,`pwd`/$@/diamond)
 
 kraken:
