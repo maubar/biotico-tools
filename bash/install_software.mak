@@ -129,6 +129,12 @@ bwa/:
 	cd bwa && make
 	$(call LINK_TO_BIN,`pwd`/bwa/bwa)
 
+bowtie2:
+	wget -N http://downloads.sourceforge.net/project/bowtie-bio/bowtie2/2.2.4/bowtie2-2.2.4-linux-x86_64.zip
+	unzip bowtie2-*.zip
+	mv bowtie2-*/ bowtie2/
+	shopt -s extglob && $(call LINK_TO_BIN,`pwd`/bowtie2/bowtie!(*debug))
+
 #Requires python2.x and python2.x-config, where x = 6 or 7
 #This is breaking, maybe requires python-dev package?
 stampy/:
