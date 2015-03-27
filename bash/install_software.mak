@@ -11,6 +11,7 @@ SHELL := /bin/bash
 ROOT_FOLDER := $(shell pwd)
 
 LINK_TO_BIN = ln -st bin/ $(1)
+MAKE_NOFLAGS := make MAKEFLAGS= 
 
 #Python configuration.
 # Commands like pip or python might require sudo or a virtualenv
@@ -52,8 +53,13 @@ $(shell mkdir -p bin/)
 #**************************************************************************************
 seqtk/:
 	git clone https://github.com/lh3/seqtk.git
-	cd seqtk && make
+	cd seqtk && $(MAKE_NOFLAGS)
 	$(call LINK_TO_BIN,`pwd`/seqtk/seqtk)
+
+tabtk:
+	git clone https://github.com/lh3/tabtk.git
+	cd tabtk && $(MAKE_NOFLAGS)
+	$(call LINK_TO_BIN,`pwd`/tabtk/tabtk)
 
 samtools/:
 	wget -N https://github.com/samtools/samtools/releases/download/1.2/samtools-1.2.tar.bz2
@@ -67,6 +73,13 @@ picard-tools/:
 	unzip picard-tools-*.zip
 	mv picard-tools-*/ picard-tools/
 
+.PHONY: bedtools2
+bedtools2:
+	#wget -N https://github.com/arq5x/bedtools2/releases/download/v2.23.0/bedtools-2.23.0.tar.gz
+	#tar -xzf bedtools-*.tar.gz
+	cd $@ && $(MAKE_NOFLAGS)
+	$(call LINK_TO_BIN,`pwd`/bedtools2/*)
+	
 #**************************************************************************************
 #******************        QC and QF       ********************************************
 #**************************************************************************************
@@ -269,3 +282,17 @@ kraken:
 	mkdir -p kraken/dist
 	cd kraken && bash install_kraken.sh dist/
 	$(call LINK_TO_BIN,`pwd`/$@/dist/*)
+
+#************************************************************************
+#****************      VARIANT CALLING       ****************************
+#************************************************************************
+freebayes:
+	git clone --recursive git://github.com/ekg/freebayes.git
+	cd freebayes && $(MAKE_NOFLAGS)
+	$(call LINK_TO_BIN,`pwd`/$@/bin/*)
+
+vcflib:
+	@echo "If rule fails, run without -r flag"
+	git clone --recursive https://github.com/ekg/vcflib.git
+	cd vcflib && env && $(MAKE_NOFLAGS) 
+	$(call LINK_TO_BIN,`pwd`/$@/bin/*)
