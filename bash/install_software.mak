@@ -11,6 +11,7 @@ SHELL := /bin/bash
 ROOT_FOLDER := $(shell pwd)
 
 LINK_TO_BIN = ln -st bin/ $(1)
+GET_EXECUTABLES_FROM_FOLDER=$(shell for x in $$(find $(1) -maxdepth 1 -executable -not -type d); do basename $$x;done)
 MAKE_NOFLAGS := make MAKEFLAGS= 
 
 #Python configuration.
@@ -296,3 +297,16 @@ vcflib:
 	git clone --recursive https://github.com/ekg/vcflib.git
 	cd vcflib && env && $(MAKE_NOFLAGS) 
 	$(call LINK_TO_BIN,`pwd`/$@/bin/*)
+
+#************************************************************************
+#****************      READ SIMULATION       ****************************
+#************************************************************************
+.PHONY: BEAR 
+BEAR: DRISEE
+	#git clone https://github.com/sej917/BEAR.git
+	$(call LINK_TO_BIN,`pwd`/$@/scripts/*)
+
+#Requires Qiime, Biopython , perl 
+DRISEE:
+	git clone https://github.com/MG-RAST/DRISEE.git
+	$(call LINK_TO_BIN,$(addprefix $(ROOT_DIR)/$@/,$(call GET_EXECUTABLES_FROM_FOLDER,$@)))
