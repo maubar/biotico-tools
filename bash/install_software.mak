@@ -158,6 +158,18 @@ stampy/:
 	cd stampy && make
 	$(call LINK_TO_BIN,`pwd`/stampy/stampy.py)
 
+vsearch:
+	wget -N https://github.com/torognes/vsearch/releases/download/v1.1.3/vsearch-1.1.3-linux-x86_64
+	mv vsearch-* bin/vsearch
+	chmod ug+x bin/vsearch
+
+last:
+	wget -N http://last.cbrc.jp/last-572.zip
+	unzip last-572 
+	mv last-*/ last
+	cd $@ && make
+	cd $@ && make install prefix=../bin
+	 
 #**************************************************************************************
 #******************        ASSEMBLERS     *********************************************
 #**************************************************************************************
@@ -255,6 +267,11 @@ FragGeneScan:
 	mv FragGeneScan*/ FragGeneScan
 	cd FragGeneScan && make clean && make fgs
 
+MetaGeneMark:
+	@echo "This programs has to be manually downloaded"
+	wget -N http://topaz.gatech.edu/GeneMark/tmp/GMtool_WqFda/MetaGeneMark_linux_64.tar.gz
+	wget -N http://topaz.gatech.edu/GeneMark/tmp/GMtool_WqFda/gm_key_64.gz
+
 #************************************************************************
 #******************        DB SEARCHES       ****************************
 #************************************************************************
@@ -272,12 +289,12 @@ hmmer:
 	$(call LINK_TO_BIN,`pwd`/$@/binaries/hmm*)
 
 diamond:
-	wget -N http://www-ab.informatik.uni-tuebingen.de/data/software/diamond/download/public/diamond-linux64.tar.gz
+	wget -N http://github.com/bbuchfink/diamond/releases/download/v0.7.9/diamond-linux64.tar.gz
 	mkdir -p diamond/ && cd diamond && tar -xzf ../diamond*.tar.gz
 	$(call LINK_TO_BIN,`pwd`/$@/diamond)
 
 kraken:
-	wget -N http://ccb.jhu.edu/software/kraken/dl/kraken-0.10.4-beta.tgz
+	wget -N http://ccb.jhu.edu/software/kraken/dl/kraken-0.10.5-beta.tgz
 	tar -xzf kraken*.tgz
 	mv kraken*/ kraken
 	mkdir -p kraken/dist
