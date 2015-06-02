@@ -16,10 +16,17 @@ from Bio.Blast import NCBIXML
 
 def main():
 	args = create_argparser()
+	#Get files to process
 	files_to_process = get_files_to_process(args)
-	process_pool = mp.Pool(args.num_proc)
 	sys.stderr.write("Files to process:\n\t{}\n".format("\n\t".join(files_to_process)))
-	hits_per_file = process_pool.map(blastxml_parser(args), files_to_process)
+
+	#Get subset of sequences to extract hits from
+	sequence_subset = load_sequence_subset(args.subset_file) if args.subset_file else None
+
+	#Run blastxml parser and extract data
+	process_pool = mp.Pool(args.num_proc)
+	hits_per_file = process_pool.map(blastxml_parser(args,sequence_subset), files_to_process)
+	#Merge/sort hits by e-value
 	sys.stderr.write("Sorting...")
 	merged_hits = merge_and_sort_hits( hits_per_file )
 	sys.stderr.write("Total sorted hits: {}\n".format(len(merged_hits)))
@@ -27,10 +34,12 @@ def main():
 
 
 class blastxml_parser():
-	def __init__(self,args):
+	def __init__(self,args,sequence_subset):
 		self.eval_threshold = args.threshold
 		self.include_alignment = args.alignments
 		self.max_hits = args.max_hits
+		self.sequence_subset = sequence_subset
+		self.invert_subset = False
 
 	def __call__(self,blast_filename):
 		hits = []
@@ -38,10 +47,13 @@ class blastxml_parser():
 			iterations = NCBIXML.parse(blast_fh)
 			formatted_source_file = format_source_file(blast_filename)
 			sys.stderr.write("Processing {}\n".format(blast_filename))
-			for iteration in iterations:
-				iteration_hits = process_iteration(iteration, self.eval_threshold,formatted_source_file, self.include_alignment, self.max_hits)
+			for n_it,iteration in enumerate(iterations):
+				iteration_hits = process_iteration(iteration, self.eval_threshold,formatted_source_file, self.include_alignment, self.max_hits) \
+									if sequence_should_be_processed(iteration,self.sequence_subset, self.invert_subset) else False
 				if iteration_hits:
 					hits += iteration_hits
+				if n_it % 100000 == 0:
+					sys.stderr.write("{} iteration {}\n".format(blast_filename,n_it))
 			sys.stderr.write("Finished processing {}, {} hits kept\n".format(blast_filename,len(hits)))
 		return hits
 
@@ -73,9 +85,14 @@ def process_iteration(iteration_obj,eval_threshold, source_file, include_alignme
 			break
 	return iteration_hits
 
+
+def sequence_should_be_processed(iteration_obj, sequence_subset, reverse=False):
+	# != in this context corresponds to xor operation!
+	return not sequence_subset or ( (iteration_obj.query in sequence_subset) != reverse )
+
 def format_source_file(source_file):
 	return os.path.basename(source_file).rsplit(".")[0]
-	
+
 #Ideally annotate from TaxID
 def extract_species_name(hit_name):
 	species = hit_name
@@ -144,6 +161,15 @@ def get_files_to_process(args):
 
 	return files_to_process
 
+
+def load_sequence_subset(filename):
+	seq_subset = []
+	with open(filename) as seqlist_fh:
+		for line in seqlist_fh:
+			seq_subset.append(line.rstrip("\n"))
+	return frozenset(seq_subset)
+
+
 def create_argparser():
 	parser = argparse.ArgumentParser(description="The program extracts the highest scoring hits for each query \
 		sequence and outputs them ordered by e-value. Requires filenames to finish in _tool_blast[nxp]_database.xml")
@@ -153,12 +179,14 @@ def create_argparser():
 	parser.add_argument("-o","--output-file", type=argparse.FileType('w'), default=sys.stdout, help="Name of the output file" )
 	parser.add_argument("-l","--log-file", default=None, help="Name of the log file")
 
-	parser.add_argument("--max_hits",type=int,default="10",help="Max number of hits to report for each query sequence")
+	parser.add_argument("--max-hits",type=int,default="10",help="Max number of hits to report for each query sequence")
 	parser.add_argument("-a","--alignments",action='store_true',help="Include a visualization for each alignment on the file")
 	parser.add_argument("-t","--threshold",type=float,default=1,help="Exclude hits with e-value lower than threshold. Default is '1' (all hits)")
 
 	parser.add_argument("-f","--filter",type=str,help="Only process files that contain the filter string")
 	parser.add_argument("-F","--filter-out",type=str,help="Only process files that DO NOT contain the filter string")
+
+	parser.add_argument("-s","--subset-file",type=str,default=None,help="Process only hits from sequences in specified txt file")
 
 	return parser.parse_args()
 
