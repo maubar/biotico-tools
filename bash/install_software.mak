@@ -24,7 +24,6 @@ python3_bin := source activate py3k && python3
 .PHONY: maars viral-discovery
 .PHONY: fastqc jellyfish2
 .PHONY: cutadapt nesoni
-.PHONY: raymeta masurca
 
 #******************************************************
 #		MAARS pipeline tools
@@ -39,11 +38,11 @@ maars: diamond kraken
 #******************************************************
 #		Viral discovery tools
 #*****************************************************
-viral-discovery: seqtk samtools prinseq sga
+viral-discovery: seqtk samtools 
 viral-discovery: fastqc
 viral-discovery: cutadapt nesoni
 viral-discovery: bwa picard-tools
-viral-discovery: spades iva fermi raymeta masurca
+viral-discovery: spades megahit fermi iva
 viral-discovery: ncbi-blast hmmer
 
 #Create bin folder
@@ -52,7 +51,9 @@ $(shell mkdir -p bin/)
 #**************************************************************************************
 #******************        General purpose tools      *********************************
 #**************************************************************************************
-seqtk/:
+.PHONY: samtools picard-tools bedtools
+
+seqtk:
 	git clone https://github.com/lh3/seqtk.git
 	cd seqtk && $(MAKE_NOFLAGS)
 	$(call LINK_TO_BIN,`pwd`/seqtk/seqtk)
@@ -62,6 +63,7 @@ tabtk:
 	cd tabtk && $(MAKE_NOFLAGS)
 	$(call LINK_TO_BIN,`pwd`/tabtk/tabtk)
 
+samtools: samtools/1.2
 samtools/1.2: VERSION=1.2
 samtools/1.2:
 	wget -N https://github.com/samtools/samtools/releases/download/$(VERSION)/samtools-$(VERSION).tar.bz2
@@ -69,6 +71,7 @@ samtools/1.2:
 	mkdir -p samtools && mv samtools-*/ $@
 	cd $@ && make
 
+picard-tools: picard-tools/1.135
 picard-tools/1.135: VERSION=1.135
 picard-tools/1.135:
 	wget -N https://github.com/broadinstitute/picard/releases/download/$(VERSION)/picard-tools-$(VERSION).zip
@@ -76,16 +79,21 @@ picard-tools/1.135:
 	mkdir picard-tools && mv picard-tools-*/ $@
 	rm picard-tools-*.zip
 
-.PHONY: bedtools2
-bedtools2:
-	#wget -N https://github.com/arq5x/bedtools2/releases/download/v2.23.0/bedtools-2.23.0.tar.gz
-	#tar -xzf bedtools-*.tar.gz
+bedtools: bedtools/2.24.0
+bedtools/2.24.0: VERSION=2.24.0
+bedtools/2.24.0:
+	wget -N https://github.com/arq5x/bedtools2/releases/download/v$(VERSION)/bedtools-$(VERSION).tar.gz
+	tar -xzf bedtools-*.tar.gz
+	mkdir -p bedtools && mv bedtools2 $@
 	cd $@ && $(MAKE_NOFLAGS)
-	$(call LINK_TO_BIN,`pwd`/bedtools2/*)
-	
+	rm bedtools-*.tar.gz
+
 #**************************************************************************************
 #******************        QC and QF       ********************************************
 #**************************************************************************************
+.PHONY: FastQC jellyfish jellyfish2 FLASH fqtrim
+
+FastQC: FastQC/0.11.3
 FastQC/0.11.3: VERSION=0.11.3
 FastQC/0.11.3:
 	-wget -N http://www.bioinformatics.babraham.ac.uk/projects/fastqc/fastqc_v$(VERSION).zip
@@ -104,6 +112,16 @@ prinseq/:
 	chmod ug+x prinseq/prinseq-lite.pl
 	$(call LINK_TO_BIN,`pwd`/prinseq/prinseq-lite.pl)
 
+jellyfish: jellyfish/1.1.11
+jellyfish/1.1.11: VERSION=1.1.11
+jellyfish/1.1.11: 
+	-wget -N http://www.cbcb.umd.edu/software/jellyfish/jellyfish-$(VERSION).tar.gz	
+	tar -xzf jellyfish-$(VERSION).tar.gz
+	mkdir -p jellyfish 
+	cd jellyfish-*/ && ./configure --prefix=$(shell pwd)/$@ && make && make install
+	rm -r jellyfish-$(VERSION) jellyfish-$(VERSION).tar.gz
+
+jellyfish2: jellyfish2/2.2.3
 jellyfish2/2.2.3: VERSION=2.2.3
 jellyfish2/2.2.3: 
 	-wget -N https://github.com/gmarcais/Jellyfish/releases/download/v2.2.3/jellyfish-$(VERSION).tar.gz
@@ -118,12 +136,14 @@ cutadapt:
 nesoni:
 	$(pip_python2) install nesoni
 
-fqtrim:
-	-wget -N http://ccb.jhu.edu/software/fqtrim/dl/fqtrim-0.94.tar.gz
+fqtrim: fqtrim/0.94
+fqtrim/0.94: VERSION=0.94
+fqtrim/0.94:
+	-wget -N http://ccb.jhu.edu/software/fqtrim/dl/fqtrim-$(VERSION).tar.gz
 	tar -xzf fqtrim-*.tar.gz
-	mv fqtrim-*/ fqtrim
-	cd fqtrim && make release
-	$(call LINK_TO_BIN,`pwd`/fqtrim/fqtrim)
+	mkdir -p fqtrim && mv fqtrim-*/ $@
+	cd $@ && make release
+	rm fqtrim-*.tar.gz
 
 pandaseq:
 	echo "Requires zlib, bzip2 and libtool"
@@ -132,17 +152,21 @@ pandaseq:
 	cd pandaseq && bash autogen.sh && ./configure --prefix=`pwd`/dist && make && make install && make clean
 	$(call LINK_TO_BIN,`pwd`/pandaseq/dist/bin/*)
 
-FLASH:
-	wget -N http://downloads.sourceforge.net/project/flashpage/FLASH-1.2.11.tar.gz
+FLASH: FLASH/1.2.11
+FLASH/1.2.11: VERSION:=1.2.11
+FLASH/1.2.11:
+	wget -N http://downloads.sourceforge.net/project/flashpage/FLASH-$(VERSION).tar.gz
 	tar -xzf FLASH-*.tar.gz
-	mv FLASH-*/ FLASH/
-	cd FLASH && make
-	$(call LINK_TO_BIN,`pwd`/FLASH/flash)
-
+	mkdir -p FLASH && mv FLASH-*/ $@
+	cd $@ && make
+	rm FLASH-*.tar.gz
 
 #**************************************************************************************
 #******************        READ MAPPERS/ALIGNERS     **********************************
 #**************************************************************************************
+.PHONY: bwa bowtie2 last
+
+bwa: bwa/0.7.12
 bwa/0.7.12: VERSION=0.7.12
 bwa/0.7.12:
 	wget -N http://downloads.sourceforge.net/project/bio-bwa/bwa-$(VERSION).tar.bz2
@@ -152,6 +176,7 @@ bwa/0.7.12:
 	cd $@ && make
 	rm bwa-*.tar.bz2
 
+bowtie2: bowtie2/2.2.5
 bowtie2/2.2.5: VERSION=2.2.5
 bowtie2/2.2.5:
 	mkdir -p bowtie2
@@ -174,44 +199,56 @@ vsearch:
 	mv vsearch-* bin/vsearch
 	chmod ug+x bin/vsearch
 
-last:
-	wget -N http://last.cbrc.jp/last-572.zip
-	unzip last-572 
-	mv last-*/ last
-	cd $@ && make
-	cd $@ && make install prefix=../bin
+last: last/572
+last/572: VERSION=572
+last/572:
+	wget -N http://last.cbrc.jp/last-$(VERSION).zip
+	unzip last-$(VERSION).zip
+	mkdir -p $@
+	cd last-* && make && make install prefix=../$@
+	rm -r last-*.zip  last-*/
 	 
 #**************************************************************************************
 #******************        ASSEMBLERS     *********************************************
 #**************************************************************************************
+.PHONY: fermi SPAdes megahit kmc
 
-fermi:
-	wget -N https://github.com/downloads/lh3/fermi/fermi-1.1.tar.bz2
+fermi: fermi/1.1
+fermi/1.1: VERSION=1.1
+fermi/1.1:
+	wget -N https://github.com/downloads/lh3/fermi/fermi-$(VERSION).tar.bz2
 	tar -xjf fermi-*
-	mv fermi-*/ fermi
-	cd fermi && make
-	$(call LINK_TO_BIN,`pwd`/$@/{fermi,run_fermi.pl})
+	mkdir -p fermi && mv fermi-*/ $@
+	cd $@ && make
+	rm fermi-*.tar.bz2
 
-megahit:
-	git clone https://github.com/voutcn/megahit.git
-	cd megahit && make
-	$(call LINK_TO_BIN,`pwd`/$@/{megahit*,sdbg_builder_cpu})
+megahit: megahit/0.3.3
+megahit/0.3.3: VERSION=0.3.3
+megahit/0.3.3:
+	wget -N https://github.com/voutcn/megahit/releases/download/v$(VERSION)/megahit_v$(VERSION)_LINUX_CUDA6.5_sm350_x86_64-bin.tar.gz
+	tar -xzf megahit_v*.tar.gz
+	mkdir -p megahit && mv megahit_v*/ $@
+	rm megahit_*.tar.gz
 
-SPAdes:
-	wget -N http://spades.bioinf.spbau.ru/release3.5.0/SPAdes-3.5.0-Linux.tar.gz
-	tar -xzf SPAdes*.tar.gz && mv SPAdes-*/ SPAdes
-	$(call LINK_TO_BIN,`pwd`/$@/bin/*)
+SPAdes: SPAdes/3.5.0
+SPAdes/3.5.0: VERSION=3.5.0
+SPAdes/3.5.0:
+	wget -N http://spades.bioinf.spbau.ru/release$(VERSION)/SPAdes-$(VERSION)-Linux.tar.gz
+	tar -xzf SPAdes*.tar.gz
+	mkdir -p SPAdes && mv SPAdes-*/ $@
+	rm SPAdes-*-Linux.tar.gz
 
 #Assumes python3 installed from anaconda in a virtualenv called py3k
 Fastaq:
 	git clone https://github.com/sanger-pathogens/Fastaq.git
 	cd Fastaq && $(python3_bin) setup.py install
 
-kmc:
-	mkdir -p kmc/
-	cd kmc && wget -N http://sun.aei.polsl.pl/kmc/download-2.1.1/linux/kmc
-	cd kmc && wget -N http://sun.aei.polsl.pl/kmc/download-2.1.1/linux/kmc_dump
-	$(call LINK_TO_BIN,`pwd`/$@/*)
+kmc: kmc/2.2.0
+kmc/2.2.0: VERSION:=2.2.0
+kmc/2.2.0:
+	mkdir -p $@
+	cd $@ && wget -N http://sun.aei.polsl.pl/REFRESH/kmc/downloads/2.2.0/linux/kmc
+	cd $@ && wget -N http://sun.aei.polsl.pl/REFRESH/kmc/downloads/2.2.0/linux/kmc_dump
 
 #Assumes python 3 install from anaconda in a virtual env called py3k
 iva: Fastaq MUMmer smalt kmc
@@ -305,12 +342,12 @@ ncbi-blast/2.2.31+:
 	mkdir -p ncbi-blast && mv ncbi-blast-*/ $@
 	rm ncbi-blast-*.tar.gz
 
-hmmer:
-	wget -N ftp://selab.janelia.org/pub/software/hmmer3/3.1b1/hmmer-*-linux-intel-x86_64.tar.gz
+hmmer3/3.1b1: VERSION=3.1b1
+hmmer3/3.1b1:
+	wget -N ftp://selab.janelia.org/pub/software/hmmer3/$(VERSION)/hmmer-*-linux-intel-x86_64.tar.gz
 	tar -xzf hmmer-*-linux-intel-*.tar.gz
-	mv hmmer-*/ hmmer
-	$(call LINK_TO_BIN,`pwd`/$@/binaries/?hmm*)
-	$(call LINK_TO_BIN,`pwd`/$@/binaries/hmm*)
+	mkdir -p hmmer3/ && mv hmmer-*/ $@
+	@echo "Binaries in $@/binaries"
 
 diamond/0.7.9: VERSION=0.7.9
 diamond/0.7.9:
@@ -326,13 +363,24 @@ kraken/0.10.5-beta:
 	cd kraken-$(VERSION)/ && bash install_kraken.sh ../$@
 	rm -rf kraken-$(VERSION)/ kraken-*.tgz
 
+metaphlan2/901cc5778eed: VERSION=901cc5778eed
+metaphlan2/901cc5778eed:
+	wget -N https://bitbucket.org/biobakery/metaphlan2/get/$(VERSION).zip
+	unzip $(VERSION).zip
+	mkdir -p metaphlan2 && mv biobakery-metaphlan2-$(VERSION) $@
+
 #************************************************************************
 #****************      VARIANT CALLING       ****************************
 #************************************************************************
-freebayes:
+.PHONY: freebayes vcflib
+
+freebayes: freebayes/0.9.21
+freebayes/0.9.21: VERSION=0.9.21
+freebayes/0.9.21:
 	git clone --recursive git://github.com/ekg/freebayes.git
-	cd freebayes && $(MAKE_NOFLAGS)
-	$(call LINK_TO_BIN,`pwd`/$@/bin/*)
+	cd freebayes && git checkout tags/v$(VERSION)
+	mv freebayes $(VERSION) && mkdir -p freebayes && mv $(VERSION) freebayes
+	cd $@ && $(MAKE_NOFLAGS)
 
 vcflib:
 	@echo "If rule fails, run without -r flag"
