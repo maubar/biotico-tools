@@ -62,17 +62,19 @@ tabtk:
 	cd tabtk && $(MAKE_NOFLAGS)
 	$(call LINK_TO_BIN,`pwd`/tabtk/tabtk)
 
-samtools/:
-	wget -N https://github.com/samtools/samtools/releases/download/1.2/samtools-1.2.tar.bz2
+samtools/1.2: VERSION=1.2
+samtools/1.2:
+	wget -N https://github.com/samtools/samtools/releases/download/$(VERSION)/samtools-$(VERSION).tar.bz2
 	tar -xjf samtools-*.tar.bz2
-	mv samtools-*/ samtools/
-	cd samtools/ && make
-	$(call LINK_TO_BIN,`pwd`/samtools/samtools)
+	mkdir -p samtools && mv samtools-*/ $@
+	cd $@ && make
 
-picard-tools/:
-	wget -N https://github.com/broadinstitute/picard/releases/download/1.128/picard-tools-1.128.zip
+picard-tools/1.135: VERSION=1.135
+picard-tools/1.135:
+	wget -N https://github.com/broadinstitute/picard/releases/download/$(VERSION)/picard-tools-$(VERSION).zip
 	unzip picard-tools-*.zip
-	mv picard-tools-*/ picard-tools/
+	mkdir picard-tools && mv picard-tools-*/ $@
+	rm picard-tools-*.zip
 
 .PHONY: bedtools2
 bedtools2:
@@ -84,16 +86,16 @@ bedtools2:
 #**************************************************************************************
 #******************        QC and QF       ********************************************
 #**************************************************************************************
-
-fastqc:
-	wget -N http://www.bioinformatics.babraham.ac.uk/projects/fastqc/fastqc_v0.11.2.zip
-	unzip fastqc_*.zip
-	rm -rf fastqc
-	mv FastQC fastqc
-	chmod ug+x fastqc/fastqc
+FastQC/0.11.3: VERSION=0.11.3
+FastQC/0.11.3:
+	-wget -N http://www.bioinformatics.babraham.ac.uk/projects/fastqc/fastqc_v$(VERSION).zip
+	mkdir -p FastQC
+	unzip -d FastQC fastqc_*.zip
+	mv FastQC/FastQC $@
+	chmod ug+x $@/fastqc
 	@echo "This installation assumes you have at least 16 gigs of ram"
-	sed -i "s/Xmx250m/Xmx16g/" fastqc/fastqc
-	$(call LINK_TO_BIN,`pwd`/fastqc/fastqc)
+	sed -i "s/Xmx250m/Xmx16g/" $@/fastqc
+	rm fastqc_v*.zip
 
 prinseq/:
 	wget http://sourceforge.net/projects/prinseq/files/standalone/prinseq-lite-0.20.4.tar.gz/download -O prinseq.tar.gz
@@ -102,8 +104,13 @@ prinseq/:
 	chmod ug+x prinseq/prinseq-lite.pl
 	$(call LINK_TO_BIN,`pwd`/prinseq/prinseq-lite.pl)
 
-jellyfish2:
-	echo "No rule available yet" && exit 1
+jellyfish2/2.2.3: VERSION=2.2.3
+jellyfish2/2.2.3: 
+	-wget -N https://github.com/gmarcais/Jellyfish/releases/download/v2.2.3/jellyfish-$(VERSION).tar.gz
+	tar -xzf jellyfish-$(VERSION).tar.gz
+	mkdir -p jellyfish2 
+	cd jellyfish-2*/ && ./configure --prefix=$(shell pwd)/$@ && make && make install
+	rm -r jellyfish-$(VERSION) jellyfish-$(VERSION).tar.gz
 
 cutadapt:
 	$(pip_python2) install cutadapt
@@ -112,7 +119,7 @@ nesoni:
 	$(pip_python2) install nesoni
 
 fqtrim:
-	wget -N http://ccb.jhu.edu/software/fqtrim/dl/fqtrim-0.94.tar.gz
+	-wget -N http://ccb.jhu.edu/software/fqtrim/dl/fqtrim-0.94.tar.gz
 	tar -xzf fqtrim-*.tar.gz
 	mv fqtrim-*/ fqtrim
 	cd fqtrim && make release
@@ -136,18 +143,22 @@ FLASH:
 #**************************************************************************************
 #******************        READ MAPPERS/ALIGNERS     **********************************
 #**************************************************************************************
-bwa/:
-	wget -N http://downloads.sourceforge.net/project/bio-bwa/bwa-0.7.12.tar.bz2
+bwa/0.7.12: VERSION=0.7.12
+bwa/0.7.12:
+	wget -N http://downloads.sourceforge.net/project/bio-bwa/bwa-$(VERSION).tar.bz2
 	tar -xjf bwa-*.tar.bz2
-	mv bwa-*/ bwa
-	cd bwa && make
-	$(call LINK_TO_BIN,`pwd`/bwa/bwa)
+	mkdir -p bwa
+	mv bwa-*/ $@
+	cd $@ && make
+	rm bwa-*.tar.bz2
 
-bowtie2:
-	wget -N http://downloads.sourceforge.net/project/bowtie-bio/bowtie2/2.2.4/bowtie2-2.2.4-linux-x86_64.zip
+bowtie2/2.2.5: VERSION=2.2.5
+bowtie2/2.2.5:
+	mkdir -p bowtie2
+	-wget -N bowtie http://sourceforge.net/projects/bowtie-bio/files/bowtie2/$(VERSION)/bowtie2-2.2.5-linux-x86_64.zip
 	unzip bowtie2-*.zip
-	mv bowtie2-*/ bowtie2/
-	shopt -s extglob && $(call LINK_TO_BIN,`pwd`/bowtie2/bowtie!(*debug))
+	mv bowtie2-*/ $@
+	rm bowtie2-*.zip
 
 #Requires python2.x and python2.x-config, where x = 6 or 7
 #This is breaking, maybe requires python-dev package?
@@ -273,13 +284,26 @@ MetaGeneMark:
 	wget -N http://topaz.gatech.edu/GeneMark/tmp/GMtool_WqFda/gm_key_64.gz
 
 #************************************************************************
+#******************        ANNOTATION       ****************************
+#************************************************************************
+prokka/1.11: VERSION=1.11
+prokka/1.11:
+	@echo "Prokka requires the installation of Perl's libdatetime and libxml-simple"
+	-wget -N http://www.vicbioinformatics.com/prokka-$(VERSION).tar.gz
+	tar -xzf prokka-$(VERSION).tar.gz
+	mkdir -p prokka && mv prokka-*/ $@
+	$@/bin/prokka --setupdb
+	rm -r prokka-$(VERSION).tar.gz
+
+#************************************************************************
 #******************        DB SEARCHES       ****************************
 #************************************************************************
-ncbi-blast:
-	wget -N ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/ncbi-blast-2.2.??+-x64-linux.tar.gz
+ncbi-blast/2.2.31+: VERSION=2.2.31
+ncbi-blast/2.2.31+:
+	wget -N ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/$(VERSION)/ncbi-blast-*-x64-linux.tar.gz
 	tar -xzf ncbi-blast*.tar.gz
-	mv ncbi-blast-*/ ncbi-blast
-	$(call LINK_TO_BIN,`pwd`/$@/bin/*)
+	mkdir -p ncbi-blast && mv ncbi-blast-*/ $@
+	rm ncbi-blast-*.tar.gz
 
 hmmer:
 	wget -N ftp://selab.janelia.org/pub/software/hmmer3/3.1b1/hmmer-*-linux-intel-x86_64.tar.gz
@@ -288,18 +312,19 @@ hmmer:
 	$(call LINK_TO_BIN,`pwd`/$@/binaries/?hmm*)
 	$(call LINK_TO_BIN,`pwd`/$@/binaries/hmm*)
 
-diamond:
-	wget -N http://github.com/bbuchfink/diamond/releases/download/v0.7.9/diamond-linux64.tar.gz
-	mkdir -p diamond/ && cd diamond && tar -xzf ../diamond*.tar.gz
-	$(call LINK_TO_BIN,`pwd`/$@/diamond)
+diamond/0.7.9: VERSION=0.7.9
+diamond/0.7.9:
+	wget -N http://github.com/bbuchfink/diamond/releases/download/v$(VERSION)/diamond-linux64.tar.gz
+	mkdir -p $@ && cd $@ && tar -xzf ../../diamond*.tar.gz
+	rm diamond*.tar.gz
 
-kraken:
-	wget -N http://ccb.jhu.edu/software/kraken/dl/kraken-0.10.5-beta.tgz
-	tar -xzf kraken*.tgz
-	mv kraken*/ kraken
-	mkdir -p kraken/dist
-	cd kraken && bash install_kraken.sh dist/
-	$(call LINK_TO_BIN,`pwd`/$@/dist/*)
+kraken/0.10.5-beta: VERSION=0.10.5-beta
+kraken/0.10.5-beta:
+	wget -N http://ccb.jhu.edu/software/kraken/dl/kraken-$(VERSION).tgz
+	tar -xzf kraken-$(VERSION).tgz
+	mkdir -p $@
+	cd kraken-$(VERSION)/ && bash install_kraken.sh ../$@
+	rm -rf kraken-$(VERSION)/ kraken-*.tgz
 
 #************************************************************************
 #****************      VARIANT CALLING       ****************************
