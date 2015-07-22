@@ -27,7 +27,7 @@ def main():
         vcf_ref = open(sys.argv[1])
         vcf_query = open(sys.argv[2])
     else:
-        print("Program use:\n\t\tintersect_vcf_variants.py <reference.vcf> <query.vcf>")
+        print("Program use:\n\t\tintersect_vcf_variants.py <ref1.vcf> <query.vcf>")
         raise Exception
 
     file_out = sys.stdout
@@ -40,19 +40,19 @@ def main():
             query_variants[pos] = genotype
 
     # Report whether each variant of the reference is present or not in the sample
-    file_out.write("CHR\tPOS\tQUERY_GT\tGT_MATCHES_REF\n")
+    file_out.write("CHR\tSTART\tSTOP\tGT_MATCHES_REF\tGT\tALT\n")
     for line in vcf_ref:
         if line.rstrip("\n")[0] != "#":
             pos,genotype = extract_fields(line)
             if pos in query_variants:
-                file_out.write("{}\t{}\t{}\t{}\n".format(pos[0],pos[1], query_variants[pos] ,  query_variants[pos] == genotype  ))
+                file_out.write("{}\t{}\t{}\t{}\t{}\t{}\n".format(pos[0],pos[1],pos[1]+1, query_variants[pos] == genotype,query_variants[pos][0] ,query_variants[pos][1]  ))
 
 
 def extract_fields(line):
     fields = line.rstrip("\n").split("\t")
     pos = (fields[CHROM],int(fields[POS]))
     gt = extract_GT(fields[SAMPLE],fields[FORMAT])
-    genotype = gt["GT"]
+    genotype = (gt["GT"],fields[ALT])
     return pos,genotype
 
 
