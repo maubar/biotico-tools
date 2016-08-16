@@ -70,11 +70,11 @@ if __name__ == '__main__':
 	logging.basicConfig(stream=sys.stderr,level=log_level)
 
 	#Process command line arguments
-	parser = argparse.ArgumentParser(description="Filters a fastq file based on the header list file")
+	parser = argparse.ArgumentParser(description="Filters a fastq file based on the specified sequence_ids file")
 	parser.add_argument("fastq_input",help="Fastq file to filter")
-	parser.add_argument("header_file",type=argparse.FileType("r"), help="List of sequences to whitelist/blacklist")
+	parser.add_argument("sequence_ids",type=argparse.FileType("r"), help="List of sequences to whitelist/blacklist")
 	parser.add_argument("-o","--output-file", type=argparse.FileType("w"), default=sys.stdout, help="Name of the output file. Defaults to stdout" )
-	parser.add_argument("-e","--exclude-seqs",default=False,action="store_true",help="Considers the header_file as a blacklist instead of a whitelist")
+	parser.add_argument("-e","--exclude-seqs",default=False,action="store_true",help="Treats the sequence_ids as a blacklist instead of a whitelist")
 
 	args = parser.parse_args()
 
