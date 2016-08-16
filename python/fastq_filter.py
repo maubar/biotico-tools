@@ -13,12 +13,12 @@ def main(args):
 		total_reads = 0
 		match_count = 0
 
-		header_set  = createHeaderSet(args.header_file)
+		seq_id_set  = createSeqIdSet(args.sequence_ids)
 
 		include_sequence = False
 		for line_idx,line in enumerate(input_f):
-			if line_idx % 4 == 0 : # Fastq Header
-				include_sequence = (extractReadName(line) in header_set) ^ args.exclude_seqs
+			if line_idx % 4 == 0 : # Fastq seq_id
+				include_sequence = (extractReadName(line) in seq_id_set) ^ args.exclude_seqs
 				total_reads += 1
 				if include_sequence:
 					match_count += 1
@@ -29,7 +29,7 @@ def main(args):
 
 		logging.info("")
 		logging.info( "****Stats****")
-		logging.info( "Size of filtering set:\t{}".format( len(header_set)) )
+		logging.info( "Size of filtering set:\t{}".format( len(seq_id_set)) )
 		logging.info( "Total reads:\t{}".format(total_reads) )
 		logging.info( "Reads kept:\t{}".format(match_count) )
 		logging.info( "Reads discarded:\t{}".format( total_reads - match_count) )
@@ -40,8 +40,8 @@ def extractReadName(line):
 
 #******************I/O functions***********************************
 
-def createHeaderSet(header_file):
-	return set( header_file.readlines() );
+def createSeqIdSet(seq_id_file):
+	return set( seq_id_file.readlines() );
 
 #*****************Bureocracy functions**************
 
@@ -59,9 +59,6 @@ def validate_args(args):
 	if args.fastq_input and not os.path.isfile(args.fastq_input):
 		logging.error("Error! {} does not exist!\n".format(args.fastq_input))
 		return False
-
-	if not args.output_file:
-		args.output_file = extract_filename(args.fastq_input)
 
 	return True
 
