@@ -23,7 +23,7 @@ def Coords_to_segment(coord,y_pos):
 
 
 def read_blast_cols(blast_cols_file):
-    with open("blast_tsv_columns.txt") as fh:
+    with open(blast_cols_file) as fh:
         blast_cols = next(fh).rstrip(" \n").split(" ")
     return blast_cols
 
