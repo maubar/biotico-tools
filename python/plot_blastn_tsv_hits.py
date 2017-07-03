@@ -13,7 +13,6 @@ import matplotlib.pyplot as plt
 from matplotlib import collections as mc
 
 
-
 #Define Coords 'class' 
 Coords = collections.namedtuple('Coords', ['start', 'end'])
 
@@ -69,19 +68,19 @@ def plot_hits(df, sseqid, out_file):
 
     query_seqs, ovlp_regions, labels = calculate_query_coords_wrt_subject(df)
 
-    query_seqs_lines = [Coords_to_segment(seq, (hit_idx+1)*0.1) for hit_idx, seq in enumerate(query_seqs)]
-    ovlp_region_lines = [Coords_to_segment(seq, (hit_idx+1)*0.1) for hit_idx, seq in enumerate(ovlp_regions)]
+    query_seqs_lines = [Coords_to_segment(seq, (hit_idx+1)) for hit_idx, seq in enumerate(query_seqs)]
+    ovlp_region_lines = [Coords_to_segment(seq, (hit_idx+1)) for hit_idx, seq in enumerate(ovlp_regions)]
 
-    pad_left_down = [(-ref_seq_length/4, -len(query_seqs)*0.2), (0, -len(query_seqs)*0.2)]
-    pad_right_up = [(ref_seq_length, (1+len(query_seqs))*0.1),
-                    (5*ref_seq_length/4, (1+len(query_seqs))*0.1)]
+    pad_left_down = [(-ref_seq_length/4, -1/len(query_seqs)), (0, -1/len(query_seqs))]
+    pad_right_up = [(ref_seq_length, (1+len(query_seqs))),
+                    (5*ref_seq_length/4, (1+len(query_seqs)))]
 
     #Matplotlib plot
-    mpl.rcParams['figure.figsize'] = (10.0, 8.0)
+    mpl.rcParams['figure.figsize'] = (20.0, 16.0)
     fig,ax = plt.subplots()
     lc1 = mc.LineCollection([reference_seq], linewidths=7, colors=["blue"])
-    lc2 = mc.LineCollection(query_seqs_lines, linewidths=3, colors=["black"])
-    lc3 = mc.LineCollection(ovlp_region_lines, linewidths=3, colors=["green"])
+    lc2 = mc.LineCollection(query_seqs_lines, linewidths=5, colors=["black"])
+    lc3 = mc.LineCollection(ovlp_region_lines, linewidths=6, colors=["green"])
     pad = mc.LineCollection([pad_left_down, pad_right_up], linewidths=3, colors=["white"])
 
     ax.add_collection(lc1)
@@ -91,7 +90,7 @@ def plot_hits(df, sseqid, out_file):
 
     #Add labels
     for hit_idx, (lbl, query_seqs) in enumerate(zip(labels, query_seqs)):
-        ax.text(query_seqs.start, ((hit_idx+1)*0.1)+0.01, lbl)
+        ax.text(query_seqs.start, hit_idx+1+0.2, lbl)
 
     #Set title
     ax.autoscale()
