@@ -1,0 +1,73 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(ggdendro)
+library(dendextend)
+```
+
+
+```{r}
+rm(list=ls())
+my.data <- rbind(  c(0,0) , c(0,1), c(0.5,0.5) ,
+                   c(20,20), c(20,21), c(20.5,20.5)
+                   )
+
+plot(my.data)
+
+```
+
+```{r}
+dist(my.data)
+```
+
+
+```{r}
+my.hclust <- hclust(dist(my.data),method = "ward.D")
+
+my.hclust$merge
+my.hclust$height
+```
+
+```{r}
+my.hclust %>% as.dendrogram() %>%
+  set("leaves_pch", 19) %>% 
+  set("labels_cex", 0.5) %>%
+  set("branches_k_color", k = 2) %>%
+  plot()
+```
+
+```{r}
+
+#general.ward <- function(dist.obj){
+  dist.m <- dist.obj
+  if(class(dist.obj)=="dist"){
+    dist.m <- as.matrix(dist.obj)
+  }
+  #Objects to cluster
+  n.objects <- nrow(dist.m)
+  
+#my.cluster <- list(
+#  merge=matrix(0,n.objects-1,2),
+#  height=rep(0.0,n.objects-1),
+#  order=rep(0.0,n.objects)-1)
+#)
+
+
+
+#Prepare cluster list
+cluster_list <- map(1:n.objects,function(obj)list(id=-obj,members=obj,cum_dist=0))
+
+
+for(iteration in 1:(nrow(dist.m)-1)){
+  
+  
+  
+}
+
+#}
+```
+
