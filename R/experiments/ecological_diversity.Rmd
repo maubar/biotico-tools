@@ -1,0 +1,115 @@
+---
+title: "Simulating alpha diversity"
+output: html_notebook
+---
+
+```{r echo=FALSE}
+library(vegan)
+library(tidyverse)
+library(purrr)
+```
+
+# How do diversity measures look at complete evenness
+
+```{r}
+df1 <- tibble(
+  sp_number=seq(1,80),
+  shannon=map_dbl(seq(1,80), function(x) diversity( rep(100/x,x) ,index="shannon")),
+  simpson=map_dbl(seq(1,80), function(x) diversity( rep(100/x,x) ,index="simpson"))
+  #inv_simpson=map_dbl(seq(1,80), function(x) diversity( rep(100/x,x) ,index="invsimpson"))
+) %>% gather(key="index",value="value",2:3)
+
+ggplot(df1,aes(sp_number,value)) + geom_point() + facet_wrap(~index)
+```
+
+```{r}
+simulate_skewed_dist <- function(n_bugs,n_dominant,pct_dominance,dominance_sd=0.2,tail_sd=0.33){
+  
+  dominant_bugs <- rnorm(n=n_dominant,mean=(pct_dominance/n_dominant),sd=dominance_sd*(pct_dominance/n_dominant))
+  dominant_bugs.norm <- pct_dominance * dominant_bugs / sum(dominant_bugs)
+  
+  n_tail = n_bugs - n_dominant
+  tail_bugs <- rnorm(n=n_tail,mean=(100-pct_dominance),sd=(100-pct_dominance)*tail_sd)
+  #correct 0's
+  tail_bugs[tail_bugs < 0] <- (100-pct_dominance)
+  tail_bugs.norm <- (100-pct_dominance) * tail_bugs / sum(tail_bugs)
+  return(c(dominant_bugs.norm,tail_bugs.norm))
+}
+```
+
+# Set up simulation
+
+```{r}
+
+n_bugs <- seq(30,80,5)
+n_dominant_bugs <- 1:6
+dominant_pct <- seq(50,96,9)
+
+simulations <- expand.grid(n_bugs,n_dominant_bugs,dominant_pct) %>% data.frame
+colnames(simulations) <- c("bugs",'dominant_bugs','dominant_pct')
+```
+
+# Run simulations
+
+```{r}
+#could fail if dominance Std dev makes values become negative
+microbiomes <- pmap(simulations, function(bugs,dominant_bugs,dominant_pct,...) replicate(50,simulate_skewed_dist(bugs,dominant_bugs,dominant_pct)))
+
+shannon <- map(microbiomes,function(sim) diversity(t(sim),index="shannon"))
+simpson <- map(microbiomes,function(sim) diversity(t(sim),index="simpson"))
+invsimpson <- map(microbiomes,function(sim) diversity(t(sim),index="invsimpson"))
+
+simulations$shannon.mean <- map_dbl(shannon,mean)
+simulations$shannon.sd <- map_dbl(shannon,sd)
+simulations$simpson.mean <- map_dbl(simpson,mean)
+simulations$simpson.sd <- map_dbl(simpson,sd)
+simulations$invsimpson.mean <- map_dbl(invsimpson,mean)
+simulations$invsimpson.sd <- map_dbl(invsimpson,sd)
+```
+
+
+# Plot one simulation
+```{r}
+long.example <- apply(microbiomes[[120]],2,sort,decreasing=T) %>% data.frame %>% tibble::rownames_to_column(var="bug_id") %>% gather(key="sample_id",value="abundance",-bug_id) %>% filter(abundance > 5)
+
+ggplot(long.example,aes(sample_id,abundance)) + geom_bar(aes(fill=bug_id),stat="identity",position = 'stack') + coord_cartesian(ylim=c(0,100))
+
+```
+
+# Shannon
+
+```{r}
+ggplot(simulations,aes(bugs,shannon.mean)) + 
+  geom_errorbar(aes(ymin=shannon.mean-shannon.sd,ymax=shannon.mean+shannon.sd)) + 
+  geom_point(aes(color=dominant_pct)) + 
+  facet_wrap(~dominant_bugs) + theme_bw()
+
+ggplot(simulations,aes(dominant_bugs,shannon.mean)) + 
+  geom_errorbar(aes(ymin=shannon.mean-shannon.sd,ymax=shannon.mean+shannon.sd)) + 
+  geom_point(aes(color=dominant_pct)) + 
+  facet_wrap(~bugs) + theme_bw()
+```
+
+# Simpson
+
+```{r}
+ggplot(simulations,aes(dominant_bugs,simpson.mean)) + 
+  geom_errorbar(aes(ymin=simpson.mean-simpson.sd,ymax=simpson.mean+simpson.sd)) + 
+  geom_point(aes(color=dominant_pct)) + facet_wrap(~bugs) + 
+  theme_bw()
+
+simulations %>% filter(bugs == 40) %>%
+  ggplot(aes(dominant_bugs,simpson.mean)) + 
+  geom_errorbar(aes(ymin=simpson.mean-simpson.sd,ymax=simpson.mean+simpson.sd)) + 
+  geom_point(aes(color=dominant_pct)) +
+  theme_bw()
+```
+
+# Inverse simpson
+
+```{r}
+ggplot(simulations,aes(bugs,invsimpson.mean)) + 
+  geom_errorbar(aes(ymin=invsimpson.mean-invsimpson.sd,ymax=invsimpson.mean+invsimpson.sd)) + 
+  geom_point(aes(color=dominant_pct)) + 
+  facet_wrap(~dominant_bugs) + theme_bw()
+```

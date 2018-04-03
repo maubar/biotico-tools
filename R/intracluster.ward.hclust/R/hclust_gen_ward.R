@@ -29,6 +29,8 @@ generalWard <- function(dist.obj){
     dist.m <- as.matrix(dist.obj)
   }
 
+  square.dist.m <- dist.m ** 2
+
   # Objects to cluster
   n.objects <- nrow(dist.m)
 
@@ -37,7 +39,7 @@ generalWard <- function(dist.obj){
     merge=matrix(0,n.objects-1,2),
     height=rep(0.0,n.objects-1),
     order=rep(0.0,n.objects-1),
-    labels=NULL,
+    labels=rownames(dist.m),
     call=NULL,
     dist.method=ifelse(class(dist.obj)=="dist",attr(dist.obj,"method"),"custom")
   )
@@ -55,7 +57,7 @@ generalWard <- function(dist.obj){
     #Brute force all possible mixes
     for(c1_idx in 1:(length(cluster_list)-1)){
       for(c2_idx in (c1_idx+1):length(cluster_list)){
-        candidate_merge <- merge_two_clusters(cluster_list[[c1_idx]],cluster_list[[c2_idx]],dist.m,iteration)
+        candidate_merge <- merge_two_clusters(cluster_list[[c1_idx]],cluster_list[[c2_idx]],square.dist.m,iteration)
         candidate_var_delta <- intraclust_var_change(cluster_list[[c1_idx]],cluster_list[[c2_idx]],candidate_merge)
 
         if(is.null(best_new_cluster) || (candidate_var_delta < best_intracluster_var_delta)){
