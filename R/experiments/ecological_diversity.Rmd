@@ -11,16 +11,69 @@ library(purrr)
 
 # How do diversity measures look at complete evenness
 
+Simulate "microbiomes" from 1 to 80 individuals, all with abundance 1/(# of individuals). 
+This should give an idea on the range and behavior of the indexes
+
+Observations
+
+* Range of Shannon : 0 to infinity
+* Range of Simpson : bounded between 1 and 0
+* Simpson tends to peak for full evenness at small number of individuals (~10 or 15)
+* Shannon does not plateau for evenness as the number of individual increases
+
+
 ```{r}
+
+n_individuals <- 150
+
 df1 <- tibble(
-  sp_number=seq(1,80),
-  shannon=map_dbl(seq(1,80), function(x) diversity( rep(100/x,x) ,index="shannon")),
-  simpson=map_dbl(seq(1,80), function(x) diversity( rep(100/x,x) ,index="simpson"))
-  #inv_simpson=map_dbl(seq(1,80), function(x) diversity( rep(100/x,x) ,index="invsimpson"))
-) %>% gather(key="index",value="value",2:3)
+  sp_number=seq(1,n_individuals),
+  shannon=map_dbl(seq(1,n_individuals), function(x) diversity( rep(100/x,x) ,index="shannon")),
+  simpson=map_dbl(seq(1,n_individuals), function(x) diversity( rep(100/x,x) ,index="simpson"))
+  #inv_simpson=map_dbl(seq(1,n_individuals), function(x) diversity( rep(100/x,x) ,index="invsimpson"))
+) %>% gather(key="index",value="value",-sp_number)
 
 ggplot(df1,aes(sp_number,value)) + geom_point() + facet_wrap(~index)
 ```
+
+# How do Simpson and Shannon behave with skewed distributions
+
+Set up a simulation as follows: Choose
+
+* n_bugs: number of individuals in the microbiome
+* Dominant bugs:
+    We simulate dominant bugs, by deciding 
+    * how many bugs dominate the sample (n_dominant)
+    * what share of the % they take (pct_dominance)
+    
+    Then, we simulate each bug's abundance as normally distributed, 
+    * with mean= pct_dominance / n_dominant
+    * sd = dominance_sd 
+    
+* Tail bugs: For the rest of the bugs (n_bugs - n_dominant),
+each of their abundance is simulated similarly, normally distributed
+    * mean = (1 - pct_dominance) / (n_bugs - n_dominant)
+    * sd = tail_sd
+
+Both dominant bugs and tail bug's abundances are normalized individually,
+so that final sum is as specified
+
+For example, choosing
+* n_bugs = 10
+* n_dominant = 2
+* pct_dominance = 90%
+* sd_dominance = 10%
+* sd_tail=33%
+    
+Implies:
+1) the 2 dominant bugs will take 90% of the proportion
+2) the 8 remaining bugs will take the 10% remaining
+3) We simulate each dominant bugs as normally distributed with mean 45% and sd=0.2 
+Then we normalize the resulting values so that they add up to 90%
+4) The 8 tail bugs are simulated as having mean 1.25% (10%/8), sd=0.33 
+and then normalize the values so that they add up to 10%
+
+
 
 ```{r}
 simulate_skewed_dist <- function(n_bugs,n_dominant,pct_dominance,dominance_sd=0.2,tail_sd=0.33){
@@ -37,7 +90,13 @@ simulate_skewed_dist <- function(n_bugs,n_dominant,pct_dominance,dominance_sd=0.
 }
 ```
 
-# Set up simulation
+## Set up simulation
+
+For the simulation, we will try the combination of all of the following parameters
+
+* Number of individuals : from 30, 35, 40, 45 ... 80
+* Number of dominant bugs per sample: between 1 and 6
+* % dominance: 50 to 96 in steps of 9
 
 ```{r}
 
@@ -49,7 +108,7 @@ simulations <- expand.grid(n_bugs,n_dominant_bugs,dominant_pct) %>% data.frame
 colnames(simulations) <- c("bugs",'dominant_bugs','dominant_pct')
 ```
 
-# Run simulations
+## Run simulations
 
 ```{r}
 #could fail if dominance Std dev makes values become negative
@@ -68,42 +127,58 @@ simulations$invsimpson.sd <- map_dbl(invsimpson,sd)
 ```
 
 
-# Plot one simulation
-```{r}
-long.example <- apply(microbiomes[[120]],2,sort,decreasing=T) %>% data.frame %>% tibble::rownames_to_column(var="bug_id") %>% gather(key="sample_id",value="abundance",-bug_id) %>% filter(abundance > 5)
+# Plot one simulation to exemplify
 
-ggplot(long.example,aes(sample_id,abundance)) + geom_bar(aes(fill=bug_id),stat="identity",position = 'stack') + coord_cartesian(ylim=c(0,100))
+```{r}
+long.example <- apply(microbiomes[[120]],2,sort,decreasing=T) %>% 
+  data.frame %>% 
+  tibble::rownames_to_column(var="bug_id") %>% 
+  gather(key="sample_id",value="abundance",-bug_id) %>% 
+  extract(sample_id,into="sample_id",regex="X(.+)",convert=TRUE) %>%
+  group_by(sample_id) %>%
+  mutate(bug_rank=rank(-abundance,ties.method="first"),new_bug_id=map_chr(bug_rank,~ifelse(.x <= 5,.x,"other"))) %>% 
+  ungroup()
+
+ggplot(long.example,aes(sample_id,abundance)) + geom_bar(aes(fill=new_bug_id),stat="identity",position = 'stack') + coord_cartesian(ylim=c(0,100))
 
 ```
 
-# Shannon
+# Shannon diversity
 
-```{r}
+
+
+```{r fig.width=6,fig.height=2}
 ggplot(simulations,aes(bugs,shannon.mean)) + 
   geom_errorbar(aes(ymin=shannon.mean-shannon.sd,ymax=shannon.mean+shannon.sd)) + 
-  geom_point(aes(color=dominant_pct)) + 
-  facet_wrap(~dominant_bugs) + theme_bw()
+  geom_point(aes(color=factor(dominant_pct))) + 
+  facet_wrap(~dominant_bugs,nrow=1) + theme_bw() + 
+  xlab("Number of bugs") + ylab("Mean of Shannon diversity") + ggtitle("Shannon diversity per # of dominant bugs")
+```
 
+# Shannon diversity by number of species
+
+From this plot it appears the shannon diversity is way more driven by number of dominant species, than by number of species.
+The value for diversity when there are few and strongly dominating species does not change a lot when varying the number of individuals in the sample
+
+```{r fig.width=6,fig.height=3}
 ggplot(simulations,aes(dominant_bugs,shannon.mean)) + 
   geom_errorbar(aes(ymin=shannon.mean-shannon.sd,ymax=shannon.mean+shannon.sd)) + 
-  geom_point(aes(color=dominant_pct)) + 
-  facet_wrap(~bugs) + theme_bw()
+  geom_point(aes(color=factor(dominant_pct))) + 
+  facet_wrap(~bugs,nrow=2) + theme_bw() + 
+  xlab("# of dominant bugs")
 ```
 
 # Simpson
 
-```{r}
+This index appears to be more driven by evenness.
+
+```{r fig.width=6,fig.height=3}
 ggplot(simulations,aes(dominant_bugs,simpson.mean)) + 
   geom_errorbar(aes(ymin=simpson.mean-simpson.sd,ymax=simpson.mean+simpson.sd)) + 
-  geom_point(aes(color=dominant_pct)) + facet_wrap(~bugs) + 
-  theme_bw()
-
-simulations %>% filter(bugs == 40) %>%
-  ggplot(aes(dominant_bugs,simpson.mean)) + 
-  geom_errorbar(aes(ymin=simpson.mean-simpson.sd,ymax=simpson.mean+simpson.sd)) + 
-  geom_point(aes(color=dominant_pct)) +
+  geom_point(aes(color=factor(dominant_pct))) + facet_wrap(~bugs) + 
   theme_bw()
 ```
+
 
 # Inverse simpson
 
